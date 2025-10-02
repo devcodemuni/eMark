@@ -1,13 +1,13 @@
 package com.codemuni.service;
 
 import com.codemuni.App;
+import com.codemuni.utils.AppConstants;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
 import javax.swing.*;
 import java.awt.*;
 import java.net.HttpURLConnection;
-import java.net.URI;
 import java.net.URL;
 
 /**
@@ -16,8 +16,8 @@ import java.net.URL;
  */
 public class VersionManager {
 
-    private static final Log log = LogFactory.getLog(VersionManager.class);
     public static final String GITHUB_RELEASES_LATEST = "https://github.com/devcodemuni/eMark/releases/latest";
+    private static final Log log = LogFactory.getLog(VersionManager.class);
     private static final int TIMEOUT_MS = 5000; // 5 seconds
 
     /**
@@ -121,18 +121,55 @@ public class VersionManager {
      */
     public static void makeLabelClickable(final JLabel label) {
         label.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        label.setOpaque(true);
+        label.setBackground(new Color(255, 230, 230));
+        label.setForeground(new Color(200, 0, 0));
+        label.setBorder(BorderFactory.createEmptyBorder(4, 8, 4, 8)); // padding
+        label.setText("<html><b>🔔 Update available!</b></html>");
+        label.setToolTipText("Visit the official eMark website to download the latest version");
+
         label.addMouseListener(new java.awt.event.MouseAdapter() {
             @Override
-            public void mouseClicked(java.awt.event.MouseEvent evt) {
+            public void mouseClicked(java.awt.event.MouseEvent e) {
                 try {
-                    Desktop.getDesktop().browse(new URI(GITHUB_RELEASES_LATEST));
-                } catch (Exception e) {
-                    log.error("Failed to open GitHub releases", e);
-                    JOptionPane.showMessageDialog(label, "Unable to open browser.", "Error", JOptionPane.ERROR_MESSAGE);
+                    Desktop.getDesktop().browse(new java.net.URI(AppConstants.APP_WEBSITE));
+                } catch (Exception ex) {
+                    log.error("Failed to open website: " + ex.getMessage());
                 }
             }
+
+            @Override
+            public void mouseEntered(java.awt.event.MouseEvent e) {
+                label.setText("<html><b><u>🔔 Update available!</u></b></html>");
+                label.setBackground(new Color(255, 210, 210)); // darker hover
+                label.setForeground(new Color(160, 0, 0));
+            }
+
+            @Override
+            public void mouseExited(java.awt.event.MouseEvent e) {
+                label.setText("<html><b>🔔 Update available!</b></html>");
+                label.setBackground(new Color(255, 230, 230));
+                label.setForeground(new Color(200, 0, 0));
+            }
+
+            @Override
+            public void mousePressed(java.awt.event.MouseEvent e) {
+                label.setBackground(new Color(255, 180, 180)); // click feedback
+            }
+
+            @Override
+            public void mouseReleased(java.awt.event.MouseEvent e) {
+                label.setBackground(new Color(255, 210, 210));
+            }
         });
+
+        // Rounded background effect
+        label.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(200, 0, 0), 1, true),
+                BorderFactory.createEmptyBorder(4, 8, 4, 8)
+        ));
     }
+
 
     /**
      * Callback interface for async version check.

@@ -1,6 +1,7 @@
 package com.codemuni.gui.pdfHandler;
 
 import com.codemuni.service.VersionManager;
+import com.codemuni.utils.AppConstants;
 import com.formdev.flatlaf.ui.FlatUIUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -83,33 +84,7 @@ public class TopBarPanel extends JPanel {
                     @Override
                     public void run() {
                         if (updateAvailable) {
-                            versionStatusLabel.setText("Update available!");
-                            versionStatusLabel.setForeground(new Color(0xFF6B6B));
-                            versionStatusLabel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-
-                            // Add click listener to open release page
-                            versionStatusLabel.addMouseListener(new java.awt.event.MouseAdapter() {
-                                @Override
-                                public void mouseClicked(java.awt.event.MouseEvent e) {
-                                    try {
-                                        Desktop.getDesktop().browse(new java.net.URI(
-                                                VersionManager.GITHUB_RELEASES_LATEST));
-                                    } catch (Exception ex) {
-                                        log.error("Failed to open GitHub releases" + ex.getMessage());
-                                    }
-                                }
-
-                                @Override
-                                public void mouseEntered(java.awt.event.MouseEvent e) {
-                                    versionStatusLabel.setText("<html><u>Update available!</u></html>");
-                                }
-
-                                @Override
-                                public void mouseExited(java.awt.event.MouseEvent e) {
-                                    versionStatusLabel.setText("Update available!");
-                                }
-                            });
-
+                            VersionManager.makeLabelClickable(versionStatusLabel);
                         } else {
                             // Hide label if no update
                             versionStatusLabel.setVisible(false);
