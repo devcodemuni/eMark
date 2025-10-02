@@ -1,5 +1,6 @@
 package com.codemuni.core.keyStoresProvider;
 
+import com.codemuni.core.keyStoresProvider.X509CertificateValidator;
 import org.bouncycastle.asn1.ASN1InputStream;
 import org.bouncycastle.asn1.ASN1Sequence;
 import org.bouncycastle.asn1.DERIA5String;

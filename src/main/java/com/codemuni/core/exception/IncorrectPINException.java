@@ -1,4 +1,4 @@
-package com.codemuni.exceptions;
+package com.codemuni.core.exception;
 
 public class IncorrectPINException extends Exception {
     public IncorrectPINException(String message, Throwable cause) {

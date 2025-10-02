@@ -1,4 +1,4 @@
-package com.codemuni.model;
+package com.codemuni.core.model;
 
 import java.security.cert.X509Certificate;
 import java.util.Objects;
@@ -6,26 +6,26 @@ import java.util.Objects;
 public class KeystoreAndCertificateInfo {
     private final String keystoreName;
     private final String tokenSerial;
-    private final String pkcs11Path;
-    private final String pfxFilePath;
-    private X509Certificate certificate;
+    private final String pkcs11LibPath;
 
-    // Constructor for PKCS11 and Windows keystores
-    public KeystoreAndCertificateInfo(X509Certificate certificate, String keystoreName, String tokenSerial, String pkcs11Path) {
-        this.certificate = Objects.requireNonNull(certificate, "certificate must not be null");
-        this.keystoreName = keystoreName;
-        this.tokenSerial = tokenSerial;
-        this.pkcs11Path = pkcs11Path;
-        this.pfxFilePath = null;
+    public String getPkcs11LibPath() {
+        return pkcs11LibPath;
     }
 
-    // Constructor for PFX keystore (certificate loaded later)
-    public KeystoreAndCertificateInfo(String keystoreName, String pfxFilePath) {
-        this.keystoreName = keystoreName;
-        this.pfxFilePath = Objects.requireNonNull(pfxFilePath, "pfxFile must not be null");
-        this.tokenSerial = null;
-        this.pkcs11Path = null;
-        this.certificate = null; // Will be set later
+    private final String pfxFilePath;
+
+    public String getPfxFilePath() {
+        return pfxFilePath;
+    }
+
+    private X509Certificate certificate;
+
+    public String getTokenSerial() {
+        return tokenSerial;
+    }
+
+    public String getKeystoreName() {
+        return keystoreName;
     }
 
     public X509Certificate getCertificate() {
@@ -36,24 +36,26 @@ public class KeystoreAndCertificateInfo {
         this.certificate = certificate;
     }
 
+    // Constructor for PKCS11 and Windows keystores
+    public KeystoreAndCertificateInfo(X509Certificate certificate, String keystoreName, String tokenSerial, String pkcs11LibPath) {
+        this.certificate = Objects.requireNonNull(certificate, "certificate must not be null");
+        this.keystoreName = keystoreName;
+        this.tokenSerial = tokenSerial;
+        this.pkcs11LibPath = pkcs11LibPath;
+        this.pfxFilePath = null;
+    }
+
+    // Constructor for PFX keystore (certificate loaded later)
+    public KeystoreAndCertificateInfo(String keystoreName, String pfxFilePath) {
+        this.keystoreName = keystoreName;
+        this.pfxFilePath = Objects.requireNonNull(pfxFilePath, "pfxFile must not be null");
+        this.tokenSerial = null;
+        this.pkcs11LibPath = null;
+        this.certificate = null; // Will be set later
+    }
+
     public String getCertificateSerial() {
         return certificate != null ? certificate.getSerialNumber().toString(16) : null;
-    }
-
-    public String getTokenSerial() {
-        return tokenSerial;
-    }
-
-    public String getKeystoreName() {
-        return keystoreName;
-    }
-
-    public String getPkcs11Path() {
-        return pkcs11Path;
-    }
-
-    public String getPfxFilePath() {
-        return pfxFilePath;
     }
 
     @Override
@@ -89,7 +91,7 @@ public class KeystoreAndCertificateInfo {
                     ", issuer=" + certificate.getIssuerX500Principal().getName() +
                     ", keystoreName='" + keystoreName + '\'' +
                     ", tokenSerial='" + tokenSerial + '\'' +
-                    ", pkcs11Path='" + pkcs11Path + '\'' +
+                    ", pkcs11Path='" + pkcs11LibPath + '\'' +
                     '}';
         } else {
             return "CertificateInfo{pfxFile='" + pfxFilePath + "', keystoreName='" + keystoreName + "'}";

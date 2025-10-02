@@ -1,6 +1,6 @@
 package com.codemuni.core.signer;
 
-import com.codemuni.exceptions.TSAConfigurationException;
+import com.codemuni.core.exception.TSAConfigurationException;
 import com.itextpdf.text.pdf.security.TSAClientBouncyCastle;
 
 public class CustomTSAClientBouncyCastle extends TSAClientBouncyCastle {
@@ -22,10 +22,6 @@ public class CustomTSAClientBouncyCastle extends TSAClientBouncyCastle {
         this.url = url;
     }
 
-    public String getUrl() {
-        return url;
-    }
-
     /**
      * Validates that the given URL is not null or empty.
      * Throws IllegalArgumentException if the URL is invalid.
@@ -39,5 +35,9 @@ public class CustomTSAClientBouncyCastle extends TSAClientBouncyCastle {
             throw new TSAConfigurationException("TSA URL must start with http:// or https://");
         }
         return url.trim();
+    }
+
+    public String getUrl() {
+        return url;
     }
 }

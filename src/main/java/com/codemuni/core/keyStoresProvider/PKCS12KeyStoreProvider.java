@@ -1,12 +1,11 @@
 package com.codemuni.core.keyStoresProvider;
 
-import com.codemuni.exceptions.CertificateNotFoundException;
-import com.codemuni.exceptions.KeyStoreInitializationException;
-import com.codemuni.exceptions.PrivateKeyAccessException;
-import com.codemuni.exceptions.UserCancelledPasswordEntryException;
+import com.codemuni.core.exception.CertificateNotFoundException;
+import com.codemuni.core.exception.KeyStoreInitializationException;
+import com.codemuni.core.exception.PrivateKeyAccessException;
+import com.codemuni.core.exception.UserCancelledPasswordEntryException;
+import com.codemuni.core.model.KeystoreAndCertificateInfo;
 import com.codemuni.gui.PasswordDialog;
-import com.codemuni.gui.pdfHandler.PdfViewerMain;
-import com.codemuni.model.KeystoreAndCertificateInfo;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
@@ -36,6 +35,11 @@ public class PKCS12KeyStoreProvider implements KeyStoreProvider {
 
     public PKCS12KeyStoreProvider(String pfxFilePath) {
         this.pfxFilePath = pfxFilePath;
+    }
+
+    public PKCS12KeyStoreProvider(String pfxFilePath, String password) {
+        this.pfxFilePath = pfxFilePath;
+        this.cachedPassword = password.toCharArray();
     }
 
     @Override
@@ -114,7 +118,7 @@ public class PKCS12KeyStoreProvider implements KeyStoreProvider {
      */
     private char[] showPasswordPrompt(String message, boolean showError) throws UserCancelledPasswordEntryException {
         PasswordDialog dialog = new PasswordDialog(
-                PdfViewerMain.INSTANCE,
+                null,
                 "Authentication Required",
                 message,
                 "Enter password",

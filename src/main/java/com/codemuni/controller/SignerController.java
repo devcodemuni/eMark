@@ -2,17 +2,17 @@ package com.codemuni.controller;
 
 import com.codemuni.App;
 import com.codemuni.config.ConfigManager;
+import com.codemuni.core.exception.CertificateNotFoundException;
+import com.codemuni.core.exception.IncorrectPINException;
+import com.codemuni.core.exception.UserCancelledOperationException;
+import com.codemuni.core.exception.UserCancelledPasswordEntryException;
 import com.codemuni.core.keyStoresProvider.*;
+import com.codemuni.core.model.KeystoreAndCertificateInfo;
 import com.codemuni.core.signer.AppearanceOptions;
-import com.codemuni.exceptions.CertificateNotFoundException;
-import com.codemuni.exceptions.IncorrectPINException;
-import com.codemuni.exceptions.UserCancelledOperationException;
-import com.codemuni.exceptions.UserCancelledPasswordEntryException;
 import com.codemuni.gui.CertificateListDialog;
 import com.codemuni.gui.SignatureAppearanceDialog;
 import com.codemuni.gui.SmartCardCallbackHandler;
 import com.codemuni.gui.pdfHandler.PdfViewerMain;
-import com.codemuni.model.KeystoreAndCertificateInfo;
 import com.codemuni.service.PdfSignerService;
 import com.codemuni.utils.AppConstants;
 import com.itextpdf.text.BadElementException;
@@ -20,12 +20,9 @@ import com.itextpdf.text.Image;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
-import javax.security.auth.callback.UnsupportedCallbackException;
 import java.io.File;
 import java.io.IOException;
 import java.security.KeyStoreException;
-import java.security.NoSuchAlgorithmException;
-import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.List;
@@ -38,8 +35,8 @@ import java.util.stream.Collectors;
 public class SignerController {
     private static final Logger LOGGER = Logger.getLogger(SignerController.class.getName());
     private static final Log log = LogFactory.getLog(SignerController.class);
-    private final PKCS11KeyStoreProvider pkcs11KeyStoreProvider = new PKCS11KeyStoreProvider();
-    private final PdfSignerService signerService = new PdfSignerService();
+    private final PKCS11KeyStoreProvider pkcs11KeyStoreProvider;
+    private final PdfSignerService signerService;
     private File selectedFile;
     private String pdfPassword;
     private int pageNumber;
@@ -50,6 +47,8 @@ public class SignerController {
 
 
     public SignerController() {
+        pkcs11KeyStoreProvider = new PKCS11KeyStoreProvider();
+        signerService = new PdfSignerService();
     }
 
 
@@ -73,7 +72,7 @@ public class SignerController {
      * Starts the signing service by prompting the user to select a certificate and signing the PDF.
      * Execution stops gracefully if the user cancels at any stage.
      */
-    public void startSigningService() throws KeyStoreException, IOException, CertificateException, CertificateNotFoundException, UnsupportedCallbackException, NoSuchAlgorithmException, IncorrectPINException {
+    public void startSigningService() throws KeyStoreException, IOException, CertificateNotFoundException, IncorrectPINException {
         loadValidCertificates();
 
         if (keystoreAndCertificateInfos.isEmpty()) {
@@ -106,7 +105,7 @@ public class SignerController {
         // watermark image
         try {
             Image watermarkImage = Image.getInstance(Objects.requireNonNull(App.class.getResource("/icons/logo.png")));
-            appearanceOptions.setWatermarkImage(watermarkImage);
+            appearanceOptions.setWatermarkImage( appearanceOptions.isGraphicRendering() ? null : watermarkImage); // if graphic rendering is enabled, no watermark image
         } catch (BadElementException | IOException ignore) {
         }
 
@@ -196,7 +195,7 @@ public class SignerController {
 
             case AppConstants.PKCS11_KEY_STORE: {
                 pkcs11KeyStoreProvider.setTokenSerialNumber(keystoreAndCertificateInfo.getTokenSerial());
-                pkcs11KeyStoreProvider.setPkcs11LibPath(keystoreAndCertificateInfo.getPkcs11Path());
+                pkcs11KeyStoreProvider.setPkcs11LibPath(keystoreAndCertificateInfo.getPkcs11LibPath());
                 pkcs11KeyStoreProvider.setCertificateSerialNumber(keystoreAndCertificateInfo.getCertificateSerial());
                 pkcs11KeyStoreProvider.loadKeyStore(new SmartCardCallbackHandler());
                 provider = pkcs11KeyStoreProvider;

@@ -1,16 +1,17 @@
 package com.codemuni.service;
 
 import com.codemuni.config.ConfigManager;
+import com.codemuni.core.exception.SigningProcessException;
+import com.codemuni.core.exception.TSAConfigurationException;
+import com.codemuni.core.exception.UserCancelledPasswordEntryException;
 import com.codemuni.core.keyStoresProvider.KeyStoreProvider;
 import com.codemuni.core.keyStoresProvider.PKCS11KeyStoreProvider;
 import com.codemuni.core.signer.AppearanceOptions;
 import com.codemuni.core.signer.CustomTSAClientBouncyCastle;
 import com.codemuni.core.signer.Signer;
-import com.codemuni.exceptions.SigningProcessException;
-import com.codemuni.exceptions.TSAConfigurationException;
-import com.codemuni.exceptions.UserCancelledPasswordEntryException;
 import com.codemuni.gui.DialogUtils;
 import com.codemuni.gui.pdfHandler.PdfViewerMain;
+import com.codemuni.utils.AppConstants;
 import com.itextpdf.text.pdf.PdfReader;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -81,7 +82,7 @@ public class PdfSignerService {
         try {
 
             CustomTSAClientBouncyCastle tsaClient = getTsaClient(appearanceOptions);
-            String signedBase64 = new Signer().sign(reader, provider, appearanceOptions, tsaClient);
+            String signedBase64 = new Signer().sign(reader, provider, "codemuni", AppConstants.APP_NAME, appearanceOptions, tsaClient);
             byte[] signedBytes = Base64.getDecoder().decode(signedBase64);
 
             File saveFile = showSaveFileDialog();

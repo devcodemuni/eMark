@@ -1,6 +1,6 @@
 package com.codemuni.gui.pdfHandler;
 
-import com.codemuni.exceptions.UserCancelledPasswordEntryException;
+import com.codemuni.core.exception.UserCancelledPasswordEntryException;
 import com.codemuni.gui.DialogUtils;
 import com.codemuni.gui.PasswordDialog;
 import org.apache.commons.logging.Log;
@@ -64,7 +64,6 @@ public class PdfRendererService {
             currentFile = file;
             PDFRenderer renderer = new PDFRenderer(document);
 
-            float scale = RENDER_DPI / 72f;
             for (int i = 0; i < document.getNumberOfPages(); i++) {
                 BufferedImage image = renderer.renderImageWithDPI(i, RENDER_DPI);
 

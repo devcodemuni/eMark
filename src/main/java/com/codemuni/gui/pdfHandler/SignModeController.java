@@ -1,10 +1,10 @@
 package com.codemuni.gui.pdfHandler;
 
 import com.codemuni.controller.SignerController;
-import com.codemuni.exceptions.IncorrectPINException;
-import com.codemuni.exceptions.MaxPinAttemptsExceededException;
-import com.codemuni.exceptions.UserCancelledOperationException;
-import com.codemuni.exceptions.UserCancelledPasswordEntryException;
+import com.codemuni.core.exception.IncorrectPINException;
+import com.codemuni.core.exception.MaxPinAttemptsExceededException;
+import com.codemuni.core.exception.UserCancelledOperationException;
+import com.codemuni.core.exception.UserCancelledPasswordEntryException;
 import com.codemuni.gui.DialogUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;

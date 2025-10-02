@@ -1,4 +1,4 @@
-package com.codemuni.exceptions;
+package com.codemuni.core.exception;
 
 /**
  * Exception thrown when a PKCS#11 token with the specified serial number is not found.

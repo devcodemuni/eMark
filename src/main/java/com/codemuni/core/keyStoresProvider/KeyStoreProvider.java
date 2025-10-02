@@ -1,7 +1,7 @@
 package com.codemuni.core.keyStoresProvider;
 
-import com.codemuni.exceptions.*;
-import com.codemuni.model.KeystoreAndCertificateInfo;
+import com.codemuni.core.exception.*;
+import com.codemuni.core.model.KeystoreAndCertificateInfo;
 
 import java.security.KeyStoreException;
 import java.security.PrivateKey;

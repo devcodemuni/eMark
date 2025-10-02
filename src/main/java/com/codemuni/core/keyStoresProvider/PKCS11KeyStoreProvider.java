@@ -1,9 +1,9 @@
 package com.codemuni.core.keyStoresProvider;
 
-import com.codemuni.exceptions.*;
+import com.codemuni.core.exception.*;
+import com.codemuni.core.model.KeystoreAndCertificateInfo;
 import com.codemuni.gui.SmartCardCallbackHandler;
-import com.codemuni.model.KeystoreAndCertificateInfo;
-import com.codemuni.utils.AppConstants;
+
 import com.codemuni.utils.FileUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -37,17 +37,32 @@ public final class PKCS11KeyStoreProvider implements KeyStoreProvider {
     private volatile SunPKCS11 sunPKCS11Provider;
     private volatile KeyStore keyStore;
 
+
     private String certificateSerialNumber; // hex string
     private String tokenSerialNumber;       // token info serial string
     private String pkcs11LibPath;           // PKCS#11 library path
+    private String keystoreName = null;
 
-//    private boolean loggedIn = false; // NEW: Track session state
+    public PKCS11KeyStoreProvider(List<String> pkcs11LibPaths, String keystoreName) {
+        this.pkcs11LibPathsToBeLoadPublicKey = Objects.requireNonNull(pkcs11LibPaths);
+        this.keystoreName = Objects.requireNonNull(keystoreName,
+                "Keystore initialization failed: keystore name is not set.");
+    }
 
     public PKCS11KeyStoreProvider(List<String> pkcs11LibPaths) {
         this.pkcs11LibPathsToBeLoadPublicKey = Objects.requireNonNull(pkcs11LibPaths);
     }
 
+    public PKCS11KeyStoreProvider(String keystoreName) {
+        this.keystoreName = Objects.requireNonNull(keystoreName,
+                "Keystore initialization failed: keystore name is not set.");
+    }
+
     public PKCS11KeyStoreProvider() {
+    }
+
+    public void setPkcs11LibPathsToBeLoadPublicKey(List<String> pkcs11LibPathsToBeLoadPublicKey) {
+        this.pkcs11LibPathsToBeLoadPublicKey = pkcs11LibPathsToBeLoadPublicKey;
     }
 
     private static long findSlotByTokenSerial(String libPath, String desiredSerial)
@@ -69,8 +84,6 @@ public final class PKCS11KeyStoreProvider implements KeyStoreProvider {
             throw new KeyStoreInitializationException("Unable to load PKCS#11 library from path: " + libPath, e);
         }
     }
-
-    // -------------------- Internal Helpers --------------------
 
     private static PKCS11OperationException translatePKCS11Error(PKCS11Exception e) throws IncorrectPINException {
         int code = (int) e.getErrorCode();
@@ -104,7 +117,7 @@ public final class PKCS11KeyStoreProvider implements KeyStoreProvider {
         return cur;
     }
 
-    // -------------------- Public API --------------------
+    // -------------------- Internal Helpers --------------------
 
     private static PKCS11Exception findPkcs11Cause(Throwable t) {
         while (t != null) {
@@ -124,8 +137,18 @@ public final class PKCS11KeyStoreProvider implements KeyStoreProvider {
         return ex != null && ex.getErrorCode() == PKCS11Constants.CKR_PIN_LOCKED;
     }
 
-    public void setPkcs11LibPathsToBeLoadPublicKey(List<String> pkcs11LibPathsToBeLoadPublicKey) {
-        this.pkcs11LibPathsToBeLoadPublicKey = pkcs11LibPathsToBeLoadPublicKey;
+    // -------------------- Public API --------------------
+
+    public void setCertificateSerialNumber(String certificateSerialNumber) {
+        this.certificateSerialNumber = certificateSerialNumber;
+    }
+
+    public void setTokenSerialNumber(String tokenSerialNumber) {
+        this.tokenSerialNumber = tokenSerialNumber;
+    }
+
+    public void setPkcs11LibPath(String pkcs11LibPath) {
+        this.pkcs11LibPath = pkcs11LibPath;
     }
 
     @Override
@@ -176,7 +199,7 @@ public final class PKCS11KeyStoreProvider implements KeyStoreProvider {
                         pkcs11.C_GetAttributeValue(session, obj, attrs);
                         try (ByteArrayInputStream bais = new ByteArrayInputStream(attrs[0].getByteArray())) {
                             X509Certificate cert = (X509Certificate) certFactory.generateCertificate(bais);
-                            consumer.accept(new KeystoreAndCertificateInfo(cert, AppConstants.PKCS11_KEY_STORE, tokenSerial, libPath));
+                            consumer.accept(new KeystoreAndCertificateInfo(cert, keystoreName, tokenSerial, libPath));
                         }
                     }
                 }
@@ -190,18 +213,6 @@ public final class PKCS11KeyStoreProvider implements KeyStoreProvider {
                 }
             }
         }
-    }
-
-    public void setCertificateSerialNumber(String certificateSerialNumber) {
-        this.certificateSerialNumber = certificateSerialNumber;
-    }
-
-    public void setPkcs11LibPath(String pkcs11LibPath) {
-        this.pkcs11LibPath = pkcs11LibPath;
-    }
-
-    public void setTokenSerialNumber(String tokenSerialNumber) {
-        this.tokenSerialNumber = tokenSerialNumber;
     }
 
 
@@ -247,7 +258,7 @@ public final class PKCS11KeyStoreProvider implements KeyStoreProvider {
         while (cause != null) {
             if (cause instanceof javax.security.auth.login.FailedLoginException) {
                 Throwable rootCause = cause.getCause();
-                if (rootCause instanceof sun.security.pkcs11.wrapper.PKCS11Exception) {
+                if (rootCause instanceof PKCS11Exception) {
                     String msg = rootCause.getMessage();
                     if (msg.contains("CKR_PIN_INCORRECT")) {
                         throw new IncorrectPINException("The provided PIN is incorrect.", e);
@@ -257,7 +268,7 @@ public final class PKCS11KeyStoreProvider implements KeyStoreProvider {
                     }
                 }
             }
-            if (cause instanceof sun.security.pkcs11.wrapper.PKCS11Exception &&
+            if (cause instanceof PKCS11Exception &&
                     cause.getMessage().contains("CKR_CANCEL")) {
                 throw new UserCancelledPasswordEntryException("PIN entry was cancelled by the user.", e);
             }
@@ -279,7 +290,7 @@ public final class PKCS11KeyStoreProvider implements KeyStoreProvider {
         }
     }
 
-    public synchronized KeyStore loadKeyStore(SmartCardCallbackHandler handler)
+    public synchronized void loadKeyStore(SmartCardCallbackHandler handler)
             throws KeyStoreException, UserCancelledPasswordEntryException {
 
         int attempts = 0;
@@ -288,7 +299,7 @@ public final class PKCS11KeyStoreProvider implements KeyStoreProvider {
         while (true) {
             try {
                 login(handler);
-                return this.keyStore; // success
+                return; // success
             } catch (IncorrectPINException e) {
                 attempts++;
                 LOG.warn("Incorrect PIN entered (attempt " + attempts + "/" + MAX_ATTEMPTS + ").");

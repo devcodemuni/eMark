@@ -1,4 +1,4 @@
-package com.codemuni.exceptions;
+package com.codemuni.core.exception;
 
 
 public class PrivateKeyAccessException extends Exception {

@@ -1,11 +1,10 @@
 package com.codemuni.core.keyStoresProvider;
 
 
-import com.codemuni.exceptions.CertificateNotFoundException;
-import com.codemuni.exceptions.KeyStoreInitializationException;
-import com.codemuni.exceptions.PrivateKeyAccessException;
-import com.codemuni.model.KeystoreAndCertificateInfo;
-import com.codemuni.utils.AppConstants;
+import com.codemuni.core.exception.CertificateNotFoundException;
+import com.codemuni.core.exception.KeyStoreInitializationException;
+import com.codemuni.core.exception.PrivateKeyAccessException;
+import com.codemuni.core.model.KeystoreAndCertificateInfo;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
 import java.io.IOException;
@@ -17,6 +16,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Enumeration;
 import java.util.List;
+
+import static com.codemuni.utils.AppConstants.WIN_KEY_STORE;
 
 public class WindowsKeyStoreProvider extends X509CertificateValidatorImpl implements KeyStoreProvider {
 
@@ -73,7 +74,7 @@ public class WindowsKeyStoreProvider extends X509CertificateValidatorImpl implem
                 // TODO: Validate certificate signature
 
                 // Wrap as CertificateInfo (no token serial for Windows)
-                result.add(new KeystoreAndCertificateInfo(x509Cert, AppConstants.WIN_KEY_STORE, null, null));
+                result.add(new KeystoreAndCertificateInfo(x509Cert, WIN_KEY_STORE, null, null));
             }
 
         } catch (KeyStoreException e) {

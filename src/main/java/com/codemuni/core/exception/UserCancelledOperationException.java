@@ -1,4 +1,4 @@
-package com.codemuni.exceptions;
+package com.codemuni.core.exception;
 
 public class UserCancelledOperationException extends RuntimeException {
     public UserCancelledOperationException(String message) {

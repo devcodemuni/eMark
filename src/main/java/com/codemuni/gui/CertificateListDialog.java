@@ -1,8 +1,8 @@
 package com.codemuni.gui;
 
 import com.codemuni.config.ConfigManager;
+import com.codemuni.core.model.KeystoreAndCertificateInfo;
 import com.codemuni.gui.pdfHandler.PdfViewerMain;
-import com.codemuni.model.KeystoreAndCertificateInfo;
 import com.codemuni.utils.AppConstants;
 import com.codemuni.utils.Utils;
 
@@ -302,7 +302,7 @@ public class CertificateListDialog extends JDialog {
         card.putClientProperty("keystoreName", info.getKeystoreName());
         card.putClientProperty("x509Certificate", cert);
         if (info.getTokenSerial() != null) card.putClientProperty("tokenSerialNumber", info.getTokenSerial());
-        if (info.getPkcs11Path() != null) card.putClientProperty("pkcs11Path", info.getPkcs11Path());
+        if (info.getPkcs11LibPath() != null) card.putClientProperty("pkcs11Path", info.getPkcs11LibPath());
     }
 
     private String getIconPath(String keystoreName) {

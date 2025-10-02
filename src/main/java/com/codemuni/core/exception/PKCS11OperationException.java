@@ -1,4 +1,4 @@
-package com.codemuni.exceptions;
+package com.codemuni.core.exception;
 
 public class PKCS11OperationException extends RuntimeException {
     public PKCS11OperationException(String message) {

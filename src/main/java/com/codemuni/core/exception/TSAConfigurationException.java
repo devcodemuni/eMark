@@ -1,4 +1,4 @@
-package com.codemuni.exceptions;
+package com.codemuni.core.exception;
 
 /**
  * Thrown to indicate that a TSA URL is invalid (null, empty, or incorrectly formatted).

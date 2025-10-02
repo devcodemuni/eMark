@@ -1,10 +1,10 @@
 package com.codemuni.core.signer;
 
+import com.codemuni.core.exception.CertificateChainException;
+import com.codemuni.core.exception.SigningProcessException;
+import com.codemuni.core.exception.TSAConfigurationException;
+import com.codemuni.core.exception.UserCancelledPasswordEntryException;
 import com.codemuni.core.keyStoresProvider.KeyStoreProvider;
-import com.codemuni.exceptions.CertificateChainException;
-import com.codemuni.exceptions.SigningProcessException;
-import com.codemuni.exceptions.TSAConfigurationException;
-import com.codemuni.exceptions.UserCancelledPasswordEntryException;
 import com.itextpdf.text.DocumentException;
 import com.itextpdf.text.pdf.*;
 import com.itextpdf.text.pdf.security.*;
@@ -54,7 +54,12 @@ public class Signer {
         return cause;
     }
 
-    public String sign(PdfReader reader, KeyStoreProvider keyStoreProvider, AppearanceOptions options, CustomTSAClientBouncyCastle tsaClient) throws UserCancelledPasswordEntryException {
+    public String sign(PdfReader reader, KeyStoreProvider keyStoreProvider, String signatureCreator, String signatureFieldName, AppearanceOptions options, CustomTSAClientBouncyCastle tsaClient) throws UserCancelledPasswordEntryException {
+
+        if (reader == null) {
+            throw new IllegalArgumentException("PdfReader cannot be null.");
+        }
+
         PdfStamper stamper = null;
 
         try (ByteArrayOutputStream signedPdfOutputStream = new ByteArrayOutputStream()) {
@@ -71,8 +76,8 @@ public class Signer {
             stamper = PdfStamper.createSignature(reader, signedPdfOutputStream, '\0', null, true);
             PdfSignatureAppearance appearance = stamper.getSignatureAppearance();
 
-            SignatureAppearanceHandler appearanceHandler = new SignatureAppearanceHandler(keyStoreProvider, options);
-            appearanceHandler.configureAppearance(appearance);
+            SignatureAppearanceBuilder appearanceHandler = new SignatureAppearanceBuilder(keyStoreProvider, options);
+            appearanceHandler.configureAppearance(signatureFieldName, appearance, signatureCreator);
 
             // Watermark
             if (options.getWatermarkImage() != null)
@@ -104,7 +109,7 @@ public class Signer {
         } finally {
             try {
                 if (stamper != null) stamper.close();
-                if (reader != null) reader.close();
+                reader.close();
             } catch (Exception e) {
                 log.error("Failed to close resources" + e.getMessage(), e);
             }
