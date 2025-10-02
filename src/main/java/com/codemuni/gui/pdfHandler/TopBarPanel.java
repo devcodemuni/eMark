@@ -1,6 +1,6 @@
 package com.codemuni.gui.pdfHandler;
 
-import com.codemuni.utils.VersionManager;
+import com.codemuni.service.VersionManager;
 import com.formdev.flatlaf.ui.FlatUIUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;

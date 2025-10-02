@@ -2,7 +2,7 @@ package com.codemuni.gui.settings;
 
 import com.codemuni.gui.DialogUtils;
 import com.codemuni.utils.Utils;
-import com.codemuni.utils.VersionManager;
+import com.codemuni.service.VersionManager;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 

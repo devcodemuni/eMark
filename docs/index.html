@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" class="dark" x-data="app()" x-init="fetchGitHubStars(); initGallery();">
+<html lang="en" class="dark" x-data="app()" x-init="fetchGitHubStars(); initGallery(); fetchLatestRelease();">
 
 <head>
     <meta charset="UTF-8">
@@ -190,6 +190,32 @@
             position: relative;
             overflow: hidden;
             transition: all 0.3s ease;
+        }
+
+        .download-loading {
+            position: relative;
+            color: transparent !important;
+            pointer-events: none;
+        }
+
+        .download-loading::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 20px;
+            height: 20px;
+            margin: -10px 0 0 -10px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
         }
 
         .download-btn::before {
@@ -515,7 +541,7 @@
                             <p class="text-slate-300 text-sm leading-relaxed mb-4">
                                 If you find eMark useful, we'd be grateful if you could support us by starring the project on GitHub. Your support helps us continue development and keep eMark free for everyone.
                             </p>
-                            <a href="https://github.com/devcodemuni/eMark" target="_blank" rel="noopener"
+                            <a href="https://github.com/devcodemuni/eMark" target="_blank"
                                class="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white font-medium py-2.5 px-4 rounded-lg transition-colors duration-200">
                                 <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                     <path fill-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.201 22 16.425 22 12.017 22 6.484 17.522 2 12 2z" clip-rule="evenodd"></path>
@@ -819,27 +845,30 @@
             <div class="flex flex-col sm:flex-row gap-6 mb-16">
                 <!-- Windows -->
                 <a href="https://github.com/devcodemuni/eMark/releases/download/V1.0.0/eMark-1.0.0.exe"
-                   class="app-download-btn flex items-center justify-center gap-3 px-8 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl shadow-xl hover:shadow-2xl transition-all font-semibold text-white group download-btn tooltip"
+                   class="app-download-btn flex items-center justify-center gap-3 px-8 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl shadow-xl hover:shadow-2xl transition-all font-semibold text-white group download-btn tooltip download-loading"
+                   data-download-type="windows"
                    data-aos="zoom-in" data-aos-delay="200">
                     <i class="fab fa-windows text-2xl transform transition-transform group-hover:scale-110"></i>
                     <span>Windows</span>
-                    <span class="tooltip-text">Download for Windows</span>
+                    <span class="text-xs opacity-70">.exe</span>
                 </a>
                 <!-- Linux -->
                 <a href="https://github.com/devcodemuni/eMark/releases/download/V1.0.0/eMark-1.0.0.deb"
-                   class="app-download-btn flex items-center justify-center gap-3 px-8 py-4 bg-gradient-to-r from-green-600 to-emerald-600 rounded-2xl shadow-xl hover:shadow-2xl transition-all font-semibold text-white group download-btn tooltip"
+                   class="app-download-btn flex items-center justify-center gap-3 px-8 py-4 bg-gradient-to-r from-green-600 to-emerald-600 rounded-2xl shadow-xl hover:shadow-2xl transition-all font-semibold text-white group download-btn tooltip download-loading"
+                   data-download-type="linux"
                    data-aos="zoom-in" data-aos-delay="400">
                     <i class="fab fa-linux text-2xl transform transition-transform group-hover:scale-110"></i>
                     <span>Linux</span>
-                    <span class="tooltip-text">Download for Linux</span>
+                    <span class="text-xs opacity-70">.deb</span>
                 </a>
                 <!-- Cross-Platform -->
                 <a href="https://github.com/devcodemuni/eMark/releases/download/V1.0.0/emark-v1.jar"
-                   class="app-download-btn flex items-center justify-center gap-3 px-8 py-4 bg-gradient-to-r from-purple-600 to-pink-600 rounded-2xl shadow-xl hover:shadow-2xl transition-all font-semibold text-white group download-btn tooltip"
+                   class="app-download-btn flex items-center justify-center gap-3 px-8 py-4 bg-gradient-to-r from-purple-600 to-pink-600 rounded-2xl shadow-xl hover:shadow-2xl transition-all font-semibold text-white group download-btn tooltip download-loading"
+                   data-download-type="jar"
                    data-aos="zoom-in" data-aos-delay="600">
                     <i class="fas fa-cubes text-2xl transform transition-transform group-hover:scale-110"></i>
                     <span>JAR</span>
-                    <span class="tooltip-text">Cross-Platform JAR</span>
+                    <span class="text-xs opacity-70">Cross-Platform</span>
                 </a>
             </div>
             <!-- Stats -->
@@ -1063,8 +1092,10 @@
             digital signing needs.</p>
         <div class="flex flex-col sm:flex-row justify-center gap-6">
             <a href="https://github.com/devcodemuni/eMark/releases"
-               class="app-download-btn px-8 py-4 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-xl font-semibold text-white hover:shadow-2xl transition-all download-btn flex items-center justify-center gap-2">
+               class="app-download-btn px-8 py-4 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-xl font-semibold text-white hover:shadow-2xl transition-all download-btn flex items-center justify-center gap-2 download-loading"
+               data-download-type="releases">
                 <i class="fas fa-download"></i> Download Now
+                <span class="version-text text-xs ml-2"></span>
             </a>
             <a href="https://github.com/devcodemuni/eMark" target="_blank"
                class="px-8 py-4 glass-effect rounded-xl font-semibold text-slate-300 hover:text-white transition-all flex items-center justify-center gap-2">
@@ -1118,6 +1149,7 @@
                 this.fetchGitHubStars();
                 this.fetchDownloadCount();
                 this.fetchProjectCount();
+                this.fetchLatestRelease();
             },
             stars: '...',
             galleryItems: [
@@ -1193,6 +1225,54 @@
                 } catch (error) {
                     console.error('Error fetching GitHub stars:', error);
                     this.stars = '0';
+                }
+            },
+
+            async fetchLatestRelease() {
+                try {
+                    const response = await fetch('https://api.github.com/repos/devcodemuni/eMark/releases/latest');
+                    const data = await response.json();
+                    console.log("Latest Release:", data);
+                    
+                    if (data.assets && data.assets.length > 0) {
+                        // Create a map of asset types to their download URLs
+                        const assetMap = {};
+                        data.assets.forEach(asset => {
+                            if (asset.name.endsWith('.exe')) {
+                                assetMap['windows'] = asset.browser_download_url;
+                            } else if (asset.name.endsWith('.deb')) {
+                                assetMap['linux'] = asset.browser_download_url;
+                            } else if (asset.name.endsWith('.jar')) {
+                                assetMap['jar'] = asset.browser_download_url;
+                            }
+                        });
+
+                        // Update download buttons based on their data attributes
+                        document.querySelectorAll('a[data-download-type]').forEach(link => {
+                            const type = link.getAttribute('data-download-type');
+                            if (assetMap[type]) {
+                                link.href = assetMap[type];
+                                
+                                // Update version text if the element exists
+                                const versionSpan = link.querySelector('.version-text');
+                                if (versionSpan) {
+                                    const version = data.tag_name.startsWith('v') ? data.tag_name.substring(1) : data.tag_name;
+                                    versionSpan.textContent = version;
+                                }
+                            }
+                        });
+
+                        // Remove loading state
+                        document.querySelectorAll('.download-loading').forEach(el => {
+                            el.classList.remove('download-loading');
+                        });
+                    }
+                } catch (error) {
+                    console.error('Error fetching latest release:', error);
+                    // Fallback to default version if API fails
+                    document.querySelectorAll('.download-loading').forEach(el => {
+                        el.classList.remove('download-loading');
+                    });
                 }
             },
 

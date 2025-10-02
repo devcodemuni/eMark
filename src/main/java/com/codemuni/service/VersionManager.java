@@ -1,4 +1,4 @@
-package com.codemuni.utils;
+package com.codemuni.service;
 
 import com.codemuni.App;
 import org.apache.commons.logging.Log;
