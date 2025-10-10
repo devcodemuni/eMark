@@ -41,6 +41,10 @@ public class AppearanceOptions {
 
     private Image watermarkImage;
 
+    // Existing signature field support
+    private String existingFieldName = null; // If set, sign into this existing field instead of creating new one
+    private boolean useExistingField = false;
+
     // Constructors
     public AppearanceOptions() {
     }
@@ -174,6 +178,23 @@ public class AppearanceOptions {
 
     public void setWatermarkImage(Image watermarkImage) {
         this.watermarkImage = watermarkImage;
+    }
+
+    public String getExistingFieldName() {
+        return existingFieldName;
+    }
+
+    public void setExistingFieldName(String existingFieldName) {
+        this.existingFieldName = existingFieldName;
+        this.useExistingField = (existingFieldName != null && !existingFieldName.trim().isEmpty());
+    }
+
+    public boolean isUseExistingField() {
+        return useExistingField;
+    }
+
+    public void setUseExistingField(boolean useExistingField) {
+        this.useExistingField = useExistingField;
     }
 
     @Override

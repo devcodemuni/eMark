@@ -17,10 +17,14 @@ import java.util.Map;
 import static com.codemuni.utils.AppConstants.CONFIG_FILE;
 
 
-public class ConfigManager extends FileUtils {
+public final class ConfigManager {
 
     private static final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
     private static final Log log = LogFactory.getLog(ConfigManager.class);
+
+    // Prevent instantiation
+    private ConfigManager() {
+    }
 
     /**
      * Load config from file or return new empty config
@@ -43,7 +47,7 @@ public class ConfigManager extends FileUtils {
      */
     public static boolean writeConfig(AppConfig config) {
         try {
-            ensureDirectory(new File(CONFIG_FILE).getParent());
+            FileUtils.ensureDirectory(new File(CONFIG_FILE).getParent());
             mapper.writerWithDefaultPrettyPrinter().writeValue(new File(CONFIG_FILE), config);
             return true;
         } catch (IOException e) {

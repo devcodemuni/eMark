@@ -111,4 +111,37 @@ public final class X509SubjectUtils {
     public static String getIssuerSerialNumber(X509Certificate cert) {
         return getIssuerMap(cert).get("SERIALNUMBER");
     }
+
+    /**
+     * Extracts common name (CN) from DN string.
+     * Falls back to first component if CN not found.
+     * Returns truncated DN if no components can be extracted.
+     *
+     * @param dn Distinguished Name string
+     * @return Common name or fallback value
+     */
+    public static String extractCommonNameFromDN(String dn) {
+        if (dn == null || dn.isEmpty()) {
+            return "Unknown";
+        }
+
+        String[] parts = dn.split(",");
+        for (String part : parts) {
+            part = part.trim();
+            if (part.startsWith("CN=")) {
+                return part.substring(3).trim();
+            }
+        }
+
+        // If CN not found, return first component
+        if (parts.length > 0) {
+            String first = parts[0].trim();
+            int equalsIndex = first.indexOf('=');
+            if (equalsIndex > 0 && equalsIndex < first.length() - 1) {
+                return first.substring(equalsIndex + 1).trim();
+            }
+        }
+
+        return dn.length() > 50 ? dn.substring(0, 47) + "..." : dn;
+    }
 }

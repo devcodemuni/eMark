@@ -30,5 +30,40 @@ public class SettingsDialog extends JDialog {
 
         // About Tab
         tabbedPane.addTab("About", new AboutPanel());
+
+        // Bottom panel with Trust Manager button
+        JPanel bottomPanel = createBottomPanel(parent);
+        add(bottomPanel, BorderLayout.SOUTH);
+    }
+
+    private JPanel createBottomPanel(final JFrame parent) {
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.setBorder(BorderFactory.createEmptyBorder(10, 15, 10, 15));
+
+        // Trust Manager button on left
+        JButton trustManagerBtn = new JButton("Open Trust Manager");
+        trustManagerBtn.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        trustManagerBtn.setToolTipText("Open separate window to manage trust certificates");
+        trustManagerBtn.setFocusPainted(false);
+        trustManagerBtn.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                TrustManagerDialog.showTrustManager(parent);
+            }
+        });
+
+        // Close button on right
+        JButton closeBtn = new JButton("Close");
+        closeBtn.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        closeBtn.setFocusPainted(false);
+        closeBtn.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                dispose();
+            }
+        });
+
+        panel.add(trustManagerBtn, BorderLayout.WEST);
+        panel.add(closeBtn, BorderLayout.EAST);
+
+        return panel;
     }
 }

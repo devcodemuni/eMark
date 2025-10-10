@@ -3,6 +3,7 @@ package com.codemuni;
 import com.codemuni.config.AppConfig;
 import com.codemuni.config.ConfigManager;
 import com.codemuni.utils.AppConstants;
+import com.codemuni.utils.FileUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -39,7 +40,7 @@ public class AppInitializer {
      * Ensures required folders exist.
      */
     private static void ensureAppDirectories() {
-        ConfigManager.ensureDirectory(AppConstants.CONFIG_DIR);
+        FileUtils.ensureDirectory(AppConstants.CONFIG_DIR);
     }
 
     /**

@@ -25,7 +25,13 @@ public class PdfScrollPane extends JScrollPane {
 
         setViewportView(wrapper);
         setBorder(BorderFactory.createEmptyBorder());
-        getVerticalScrollBar().setUnitIncrement(16);
+
+        // Performance: Improved scroll speed for smoother navigation
+        getVerticalScrollBar().setUnitIncrement(20);
+        getVerticalScrollBar().setBlockIncrement(100);
+
+        // Enable smooth scrolling performance
+        getViewport().setScrollMode(JViewport.BACKINGSTORE_SCROLL_MODE);
 
         getVerticalScrollBar().addAdjustmentListener(e -> updateCurrentPageBasedOnScroll());
     }

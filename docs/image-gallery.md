@@ -14,9 +14,21 @@ This document showcases the different screens and features of the eMark applicat
 ![PDF Document View](images/pdf-view.png)
 *Viewing a PDF document before signing*
 
+### Signature Field Detection
+![Signature Field Detection](images/Existing-field-sign.png)
+*Automatically detect and sign existing signature fields with Adobe Reader-like interface*
+
+### Signature Panel
+![Signature Panel](images/signature-panel.png)
+*Collapsable signature properties panel for customizing signature appearance*
+
 ### Signature Appearance
 ![Signature Appearance](images/signature-appearance.png)
 *Customizing the appearance of the digital signature*
+
+### Signature Properties
+![Signature Properties](images/signature-properties.png)
+*View detailed signature information and verification status*
 
 ## Certificate Management
 

@@ -22,6 +22,7 @@ public class TopBarPanel extends JPanel {
     private static final String OPEN_PDF_TEXT = "Open PDF";
     private static final String BEGIN_SIGN_TEXT = "Begin Sign";
     private static final String CANCEL_SIGN_TEXT = "Cancel Signing (ESC)";
+    private static final String CERTIFIED_TEXT = "\ud83d\udd0f Document Certified";
     private static final Log log = LogFactory.getLog(TopBarPanel.class);
 
     private final JButton openBtn;
@@ -31,11 +32,18 @@ public class TopBarPanel extends JPanel {
     private final JLabel versionStatusLabel;
 
     private boolean signMode = false;
+    private boolean isCertified = false;
 
     public TopBarPanel(Runnable onOpen, Runnable onSettings, Runnable onToggleSign) {
         super(new BorderLayout());
-        setBorder(new EmptyBorder(10, 10, 10, 10));
+        setBorder(new EmptyBorder(12, 15, 12, 15));
         setBackground(FlatUIUtils.getUIColor("Panel.background", Color.WHITE));
+
+        // Add subtle bottom border for visual separation
+        setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(0, 0, 1, 0, new Color(0, 0, 0, 20)),
+                new EmptyBorder(12, 15, 12, 15)
+        ));
 
         // -------------------- Buttons --------------------
         openBtn = UiFactory.createButton(OPEN_PDF_TEXT, new Color(0x007BFF));
@@ -105,10 +113,29 @@ public class TopBarPanel extends JPanel {
         signBtn.setVisible(visible);
     }
 
+    /**
+     * Sets the button to certified mode - disabled with "Document Certified" label
+     */
+    public void setSignButtonCertified(boolean certified) {
+        this.isCertified = certified;
+        if (certified) {
+            signBtn.setText(CERTIFIED_TEXT);
+            signBtn.setEnabled(false);
+            signBtn.setVisible(true);
+            signBtn.setToolTipText("This document is certified. Additional signatures are not allowed.");
+        } else {
+            signBtn.setEnabled(true);
+            signBtn.setToolTipText(null);
+            updateSignButtonText();
+        }
+    }
+
     public void setInteractiveEnabled(boolean enabled) {
         openBtn.setEnabled(enabled);
         settingsBtn.setEnabled(enabled);
-        signBtn.setEnabled(enabled);
+        if (!isCertified) {
+            signBtn.setEnabled(enabled);
+        }
         setSignMode(!enabled);
     }
 
@@ -123,6 +150,14 @@ public class TopBarPanel extends JPanel {
     }
 
     private void updateSignButtonText() {
-        signBtn.setText(signMode ? CANCEL_SIGN_TEXT : BEGIN_SIGN_TEXT);
+        if (isCertified) {
+            signBtn.setText(CERTIFIED_TEXT);
+        } else {
+            signBtn.setText(signMode ? CANCEL_SIGN_TEXT : BEGIN_SIGN_TEXT);
+        }
+    }
+
+    public boolean isSignModeEnabled() {
+        return signMode;
     }
 }

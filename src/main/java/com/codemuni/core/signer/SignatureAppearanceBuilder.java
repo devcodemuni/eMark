@@ -76,8 +76,19 @@ public class SignatureAppearanceBuilder {
 
     /**
      * Configures the visible signature position and field name.
+     * Supports both creating new signature fields and signing into existing unsigned fields.
      */
     private void setVisibleSignature(String signatureFieldName, PdfSignatureAppearance appearance) {
+        // Check if we should use an existing signature field
+        if (options.isUseExistingField() && options.getExistingFieldName() != null) {
+            // Sign into existing unsigned signature field (/Sig AcroForm field)
+            String existingFieldName = options.getExistingFieldName();
+            LOGGER.info("Signing into existing signature field: " + existingFieldName);
+            appearance.setVisibleSignature(existingFieldName);
+            return;
+        }
+
+        // Create new signature field at specified coordinates
         int[] coord = options.getCoordinates();
 
         if (coord != null && coord.length == REQUIRED_COORDINATE_COUNT) {

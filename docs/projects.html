@@ -1,5 +1,7 @@
 <!DOCTYPE html>
-<html lang="en" class="dark" x-data="{ mobileMenuOpen: false, scrolled: false }" @scroll.window="scrolled = window.scrollY > 10">
+<html lang="en" class="dark" x-data="{ mobileMenuOpen: false, scrolled: false }"
+    @scroll.window="scrolled = window.scrollY > 10">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,7 +9,8 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.13.5/cdn.min.js" defer></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
     <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
     <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
     <link rel="icon" href="images/favicon.ico" type="image/x-icon">
@@ -20,43 +23,51 @@
             --dark: #0f172a;
             --darker: #020617;
         }
+
         body {
             font-family: 'Inter', sans-serif;
             background: var(--darker);
             color: #e2e8f0;
             scroll-behavior: smooth;
         }
+
         .glass-effect {
             background: rgba(15, 23, 42, 0.7);
             backdrop-filter: blur(12px);
             -webkit-backdrop-filter: blur(12px);
             border: 1px solid rgba(255, 255, 255, 0.05);
         }
+
         .gradient-text {
             background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 30%, #ec4899 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
         }
+
         .grid-pattern {
             background-image:
                 linear-gradient(rgba(99, 102, 241, 0.05) 1px, transparent 1px),
                 linear-gradient(90deg, rgba(99, 102, 241, 0.05) 1px, transparent 1px);
             background-size: 40px 40px;
         }
+
         .repo-card {
             transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
             transform: translateY(0) scale(1);
             will-change: transform;
         }
+
         .repo-card:hover {
             transform: translateY(-10px) scale(1.03);
             box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
         }
+
         .tooltip {
             position: relative;
             display: inline-block;
         }
+
         /* Default tooltip (shows at bottom) */
         .tooltip .tooltip-text {
             visibility: hidden;
@@ -78,6 +89,7 @@
             pointer-events: none;
             white-space: nowrap;
         }
+
         /* Tooltip for footer (shows at top) */
         footer .tooltip .tooltip-text {
             top: auto;
@@ -85,251 +97,281 @@
             margin-top: 0;
             margin-bottom: 10px;
         }
+
         .tooltip:hover .tooltip-text {
             visibility: visible;
             opacity: 1;
             margin-top: 5px;
         }
+
         footer .tooltip:hover .tooltip-text {
             margin-top: 0;
             margin-bottom: 5px;
         }
     </style>
 </head>
+
 <body class="grid-pattern overflow-x-hidden">
-<!-- Header -->
-<header class="sticky top-0 z-50 glass-effect" x-data="{ mobileMenuOpen: false, scrolled: false }"
+    <!-- Header -->
+    <header class="sticky top-0 z-50 glass-effect" x-data="{ mobileMenuOpen: false, scrolled: false }"
         @scroll.window="scrolled = window.scrollY > 10">
-    <div :class="scrolled ? 'py-3' : 'py-4'" class="max-w-7xl mx-auto px-6 transition-all duration-300 flex items-center justify-between">
-        <!-- Logo and Brand -->
-        <a href="index.html" class="flex items-center gap-3">
-            <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg">
-<!--                <i class="fas fa-signature text-white"></i>-->
-                <img src="images/logo.png" alt="Logo" class="w-full h-full object-contain">
-            </div>
-            <div>
-                <span class="font-bold text-xl gradient-text">eMark</span>
-                <div class="text-xs text-slate-400">Digital Signature Solution</div>
-            </div>
-        </a>
-        
-        <!-- Navigation -->
-        <nav class="hidden md:flex space-x-8">
-            <a href="index.html#features" class="text-slate-300 hover:text-white transition-colors font-medium relative group">
-                Features
-                <span class="absolute -bottom-1 left-0 w-0 h-0.5 bg-gradient-to-r from-indigo-400 to-purple-400 transition-all group-hover:w-full"></span>
-            </a>
-            <a href="index.html#gallery" class="text-slate-300 hover:text-white transition-colors font-medium relative group">
-                Gallery
-                <span class="absolute -bottom-1 left-0 w-0 h-0.5 bg-gradient-to-r from-indigo-400 to-purple-400 transition-all group-hover:w-full"></span>
-            </a>
-            <a href="index.html#usage" class="text-slate-300 hover:text-white transition-colors font-medium relative group">
-                How It Works
-                <span class="absolute -bottom-1 left-0 w-0 h-0.5 bg-gradient-to-r from-indigo-400 to-purple-400 transition-all group-hover:w-full"></span>
-            </a>
-            <a href="index.html#about" class="text-slate-300 hover:text-white transition-colors font-medium relative group">
-                About
-                <span class="absolute -bottom-1 left-0 w-0 h-0.5 bg-gradient-to-r from-indigo-400 to-purple-400 transition-all group-hover:w-full"></span>
-            </a>
-            <a href="projects.html" class="text-indigo-400 hover:text-white transition-colors font-medium relative group">
-                Other Projects
-                <span class="absolute -bottom-1 left-0 w-full h-0.5 bg-gradient-to-r from-indigo-400 to-purple-400"></span>
-            </a>
-        </nav>
-        
-        <!-- GitHub & Actions -->
-        <div class="flex items-center gap-3">
-            <a href="https://github.com/devcodemuni/eMark" target="_blank" rel="noopener noreferrer"
-               class="hidden md:flex items-center gap-2 px-4 py-2 glass-effect rounded-xl text-sm text-slate-300 hover:text-white transition-colors tooltip">
-                <i class="fab fa-github"></i>
-                <span id="star-count">...</span>
-                <span class="tooltip-text">GitHub Stars</span>
-            </a>
-            <a href="https://github.com/devcodemuni/eMark" target="_blank" rel="noopener noreferrer">
-                <button class="px-5 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-xl font-medium hover:from-indigo-500 hover:to-purple-500 transition-all shadow-lg text-sm download-btn tooltip">
-                    View on GitHub
-                    <span class="tooltip-text">Open GitHub Repository</span>
-                </button>
-            </a>
-            <!-- Mobile menu button -->
-            <button @click="mobileMenuOpen = !mobileMenuOpen" class="md:hidden ml-4 text-slate-300 tooltip">
-                <i class="fas fa-bars text-xl"></i>
-                <span class="tooltip-text">Menu</span>
-            </button>
-        </div>
-    </div>
-    
-    <!-- Mobile menu -->
-    <div x-show="mobileMenuOpen" x-transition:enter="transition ease-out duration-300"
-         x-transition:enter-start="opacity-0 transform -translate-y-4"
-         x-transition:enter-end="opacity-100 transform translate-y-0"
-         x-transition:leave="transition ease-in duration-200"
-         x-transition:leave-start="opacity-100 transform translate-y-0"
-         x-transition:leave-end="opacity-0 transform -translate-y-4"
-         class="md:hidden glass-effect border-t border-slate-800/50 px-6 py-4">
-        <div class="flex flex-col space-y-4">
-            <a href="index.html#features" @click="mobileMenuOpen = false" class="text-slate-300 hover:text-white transition-colors font-medium py-2">Features</a>
-            <a href="index.html#gallery" @click="mobileMenuOpen = false" class="text-slate-300 hover:text-white transition-colors font-medium py-2">Gallery</a>
-            <a href="index.html#usage" @click="mobileMenuOpen = false" class="text-slate-300 hover:text-white transition-colors font-medium py-2">How It Works</a>
-            <a href="index.html#about" @click="mobileMenuOpen = false" class="text-slate-300 hover:text-white transition-colors font-medium py-2">About</a>
-            <a href="https://github.com/devcodemuni/eMark" target="_blank" rel="noopener noreferrer" class="flex items-center gap-2 text-slate-300 hover:text-white transition-colors font-medium py-2">
-                <i class="fab fa-github"></i>
-                <span>GitHub</span>
-                <span id="mobile-star-count" class="ml-auto">...</span>
-            </a>
-        </div>
-    </div>
-</header>
-
-<!-- Hero Section -->
-<section class="relative py-24 md:py-32 px-6 overflow-hidden">
-    <!-- Background elements -->
-    <div class="absolute inset-0 overflow-hidden">
-        <div class="absolute top-1/4 left-1/4 w-96 h-96 bg-indigo-600/20 rounded-full blur-3xl animate-float"></div>
-        <div class="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-600/20 rounded-full blur-3xl animate-float" style="animation-delay: 2s"></div>
-        <div class="absolute top-1/3 right-1/3 w-80 h-80 bg-pink-600/15 rounded-full blur-3xl animate-float" style="animation-delay: 4s"></div>
-    </div>
-    
-    <div class="max-w-7xl mx-auto text-center relative z-10" data-aos="fade-up">
-        <!-- Badge -->
-        <div class="inline-flex items-center gap-2 px-4 py-2 glass-effect rounded-full border border-slate-700/50 mb-8">
-            <span class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
-            <span class="text-sm font-medium">Open Source • Secure • Free</span>
-        </div>
-        
-        <!-- Title -->
-        <h1 class="text-5xl md:text-6xl lg:text-7xl font-extrabold mb-6 leading-tight">
-            <span class="gradient-text">Our Projects</span>
-        </h1>
-        
-        <!-- Subtitle -->
-        <p class="text-xl text-slate-300 mb-10 max-w-2xl mx-auto leading-relaxed">
-            Explore our collection of open source projects built with passion and modern technologies.
-        </p>
-    </div>
-</section>
-
-<!-- Projects Section -->
-<section class="py-16 px-6">
-    <div class="max-w-7xl mx-auto">
-        <div id="loading" class="text-center py-20">
-            <div class="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-indigo-400 mx-auto"></div>
-            <p class="mt-4 text-slate-400">Loading projects...</p>
-        </div>
-        
-        <div id="error" class="text-center py-20 hidden">
-            <div class="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                <i class="fas fa-exclamation-triangle text-red-400 text-2xl"></i>
-            </div>
-            <h3 class="text-xl font-semibold text-slate-200 mb-2">Something went wrong</h3>
-            <p class="text-slate-400 max-w-md mx-auto">We couldn't load the projects. Please check your connection and try again.</p>
-            <button onclick="loadRepos()" class="mt-6 px-6 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-white transition-colors">
-                <i class="fas fa-sync-alt mr-2"></i>Retry
-            </button>
-        </div>
-        
-        <div id="repos" class="grid md:grid-cols-2 lg:grid-cols-3 gap-8"></div>
-    </div>
-</section>
-
-<!-- Footer -->
-<footer class="py-12 px-6 border-t border-slate-800/50">
-    <div class="max-w-7xl mx-auto">
-        <div class="flex flex-col md:flex-row justify-between items-center">
-            <div class="flex items-center gap-3 mb-6 md:mb-0">
-                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
-<!--                    <i class="fas fa-signature text-white"></i>-->
+        <div :class="scrolled ? 'py-3' : 'py-4'"
+            class="max-w-7xl mx-auto px-6 transition-all duration-300 flex items-center justify-between">
+            <!-- Logo and Brand -->
+            <a href="index.html" class="flex items-center gap-3">
+                <div
+                    class="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg">
+                    <!--                <i class="fas fa-signature text-white"></i>-->
                     <img src="images/logo.png" alt="Logo" class="w-full h-full object-contain">
                 </div>
                 <div>
                     <span class="font-bold text-xl gradient-text">eMark</span>
-                    <div class="text-sm text-slate-400">Secure PDF Signing Solution</div>
+                    <div class="text-xs text-slate-400">Digital Signature Solution</div>
                 </div>
-            </div>
-            <div class="flex flex-col items-center">
-                <div class="flex space-x-8 mb-4">
-                    <a href="https://github.com/devcodemuni/eMark" target="_blank" class="text-slate-400 hover:text-white transition-colors tooltip">
-                        <i class="fab fa-github text-xl"></i>
-                        <span class="tooltip-text">GitHub Repository</span>
-                    </a>
-                    <a href="https://github.com/devcodemuni" target="_blank" class="text-slate-400 hover:text-white transition-colors tooltip">
-                        <i class="fas fa-user text-xl"></i>
-                        <span class="tooltip-text">Developer Profile</span>
-                    </a>
-                </div>
-                <p class="text-slate-400 text-sm">
-                    Made with ❤️ by <a href="https://github.com/devcodemuni" class="text-indigo-400 hover:underline">CodeMuni</a> • Licensed under AGPL 3.0
-                </p>
+            </a>
+
+            <!-- Navigation -->
+            <nav class="hidden md:flex space-x-8">
+                <a href="index.html#features"
+                    class="text-slate-300 hover:text-white transition-colors font-medium relative group">
+                    Features
+                    <span
+                        class="absolute -bottom-1 left-0 w-0 h-0.5 bg-gradient-to-r from-indigo-400 to-purple-400 transition-all group-hover:w-full"></span>
+                </a>
+                <a href="index.html#gallery"
+                    class="text-slate-300 hover:text-white transition-colors font-medium relative group">
+                    Gallery
+                    <span
+                        class="absolute -bottom-1 left-0 w-0 h-0.5 bg-gradient-to-r from-indigo-400 to-purple-400 transition-all group-hover:w-full"></span>
+                </a>
+                <a href="index.html#usage"
+                    class="text-slate-300 hover:text-white transition-colors font-medium relative group">
+                    How It Works
+                    <span
+                        class="absolute -bottom-1 left-0 w-0 h-0.5 bg-gradient-to-r from-indigo-400 to-purple-400 transition-all group-hover:w-full"></span>
+                </a>
+                <a href="index.html#about"
+                    class="text-slate-300 hover:text-white transition-colors font-medium relative group">
+                    About
+                    <span
+                        class="absolute -bottom-1 left-0 w-0 h-0.5 bg-gradient-to-r from-indigo-400 to-purple-400 transition-all group-hover:w-full"></span>
+                </a>
+                <a href="projects.html"
+                    class="text-indigo-400 hover:text-white transition-colors font-medium relative group">
+                    Other Projects
+                    <span
+                        class="absolute -bottom-1 left-0 w-full h-0.5 bg-gradient-to-r from-indigo-400 to-purple-400"></span>
+                </a>
+            </nav>
+
+            <!-- GitHub & Actions -->
+            <div class="flex items-center gap-3">
+                <a href="https://github.com/devcodemuni/eMark" target="_blank" rel="noopener noreferrer"
+                    class="hidden md:flex items-center gap-2 px-4 py-2 glass-effect rounded-xl text-sm text-slate-300 hover:text-white transition-colors tooltip">
+                    <i class="fab fa-github"></i>
+                    <span id="star-count">...</span>
+                    <span class="tooltip-text">GitHub Stars</span>
+                </a>
+                <a href="https://github.com/devcodemuni/eMark" target="_blank" rel="noopener noreferrer">
+                    <button
+                        class="px-5 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-xl font-medium hover:from-indigo-500 hover:to-purple-500 transition-all shadow-lg text-sm download-btn tooltip">
+                        View on GitHub
+                        <span class="tooltip-text">Open GitHub Repository</span>
+                    </button>
+                </a>
+                <!-- Mobile menu button -->
+                <button @click="mobileMenuOpen = !mobileMenuOpen" class="md:hidden ml-4 text-slate-300 tooltip">
+                    <i class="fas fa-bars text-xl"></i>
+                    <span class="tooltip-text">Menu</span>
+                </button>
             </div>
         </div>
-    </div>
-</footer>
 
-<script>
-    // Initialize AOS
-    document.addEventListener('DOMContentLoaded', () => {
-        AOS.init({
-            duration: 800,
-            once: true
+        <!-- Mobile menu -->
+        <div x-show="mobileMenuOpen" x-transition:enter="transition ease-out duration-300"
+            x-transition:enter-start="opacity-0 transform -translate-y-4"
+            x-transition:enter-end="opacity-100 transform translate-y-0"
+            x-transition:leave="transition ease-in duration-200"
+            x-transition:leave-start="opacity-100 transform translate-y-0"
+            x-transition:leave-end="opacity-0 transform -translate-y-4"
+            class="md:hidden glass-effect border-t border-slate-800/50 px-6 py-4">
+            <div class="flex flex-col space-y-4">
+                <a href="index.html#features" @click="mobileMenuOpen = false"
+                    class="text-slate-300 hover:text-white transition-colors font-medium py-2">Features</a>
+                <a href="index.html#gallery" @click="mobileMenuOpen = false"
+                    class="text-slate-300 hover:text-white transition-colors font-medium py-2">Gallery</a>
+                <a href="index.html#usage" @click="mobileMenuOpen = false"
+                    class="text-slate-300 hover:text-white transition-colors font-medium py-2">How It Works</a>
+                <a href="index.html#about" @click="mobileMenuOpen = false"
+                    class="text-slate-300 hover:text-white transition-colors font-medium py-2">About</a>
+                <a href="https://github.com/devcodemuni/eMark" target="_blank" rel="noopener noreferrer"
+                    class="flex items-center gap-2 text-slate-300 hover:text-white transition-colors font-medium py-2">
+                    <i class="fab fa-github"></i>
+                    <span>GitHub</span>
+                    <span id="mobile-star-count" class="ml-auto">...</span>
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="relative py-24 md:py-32 px-6 overflow-hidden">
+        <!-- Background elements -->
+        <div class="absolute inset-0 overflow-hidden">
+            <div class="absolute top-1/4 left-1/4 w-96 h-96 bg-indigo-600/20 rounded-full blur-3xl animate-float"></div>
+            <div class="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-600/20 rounded-full blur-3xl animate-float"
+                style="animation-delay: 2s"></div>
+            <div class="absolute top-1/3 right-1/3 w-80 h-80 bg-pink-600/15 rounded-full blur-3xl animate-float"
+                style="animation-delay: 4s"></div>
+        </div>
+
+        <div class="max-w-7xl mx-auto text-center relative z-10" data-aos="fade-up">
+            <!-- Badge -->
+            <div
+                class="inline-flex items-center gap-2 px-4 py-2 glass-effect rounded-full border border-slate-700/50 mb-8">
+                <span class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
+                <span class="text-sm font-medium">Open Source • Secure • Free</span>
+            </div>
+
+            <!-- Title -->
+            <h1 class="text-5xl md:text-6xl lg:text-7xl font-extrabold mb-6 leading-tight">
+                <span class="gradient-text">Our Projects</span>
+            </h1>
+
+            <!-- Subtitle -->
+            <p class="text-xl text-slate-300 mb-10 max-w-2xl mx-auto leading-relaxed">
+                Explore our collection of open source projects built with passion and modern technologies.
+            </p>
+        </div>
+    </section>
+
+    <!-- Projects Section -->
+    <section class="py-16 px-6">
+        <div class="max-w-7xl mx-auto">
+            <div id="loading" class="text-center py-20">
+                <div class="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-indigo-400 mx-auto"></div>
+                <p class="mt-4 text-slate-400">Loading projects...</p>
+            </div>
+
+            <div id="error" class="text-center py-20 hidden">
+                <div class="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <i class="fas fa-exclamation-triangle text-red-400 text-2xl"></i>
+                </div>
+                <h3 class="text-xl font-semibold text-slate-200 mb-2">Something went wrong</h3>
+                <p class="text-slate-400 max-w-md mx-auto">We couldn't load the projects. Please check your connection
+                    and try again.</p>
+                <button onclick="loadRepos()"
+                    class="mt-6 px-6 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-white transition-colors">
+                    <i class="fas fa-sync-alt mr-2"></i>Retry
+                </button>
+            </div>
+
+            <div id="repos" class="grid md:grid-cols-2 lg:grid-cols-3 gap-8"></div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="py-12 px-6 border-t border-slate-800/50">
+        <div class="max-w-7xl mx-auto">
+            <div class="flex flex-col md:flex-row justify-between items-center">
+                <div class="flex items-center gap-3 mb-6 md:mb-0">
+                    <div
+                        class="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
+                        <!--                    <i class="fas fa-signature text-white"></i>-->
+                        <img src="images/logo.png" alt="Logo" class="w-full h-full object-contain">
+                    </div>
+                    <div>
+                        <span class="font-bold text-xl gradient-text">eMark</span>
+                        <div class="text-sm text-slate-400">Secure PDF Signing Solution</div>
+                    </div>
+                </div>
+                <div class="flex flex-col items-center">
+                    <div class="flex space-x-8 mb-4">
+                        <a href="https://github.com/devcodemuni/eMark" target="_blank"
+                            class="text-slate-400 hover:text-white transition-colors tooltip">
+                            <i class="fab fa-github text-xl"></i>
+                            <span class="tooltip-text">GitHub Repository</span>
+                        </a>
+                        <a href="https://github.com/devcodemuni" target="_blank"
+                            class="text-slate-400 hover:text-white transition-colors tooltip">
+                            <i class="fas fa-user text-xl"></i>
+                            <span class="tooltip-text">Developer Profile</span>
+                        </a>
+                    </div>
+                    <p class="text-slate-400 text-sm">
+                        Made with ❤️ by <a href="https://github.com/devcodemuni"
+                            class="text-indigo-400 hover:underline">CodeMuni</a> • Licensed under AGPL 3.0
+                    </p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Initialize AOS
+        document.addEventListener('DOMContentLoaded', () => {
+            AOS.init({
+                duration: 800,
+                once: true
+            });
+
+            // Load GitHub stars count
+            fetchGitHubStars();
+            // Load repositories
+            loadRepos();
         });
-        
-        // Load GitHub stars count
-        fetchGitHubStars();
-        // Load repositories
-        loadRepos();
-    });
 
-    // GitHub Stars Counter
-    async function fetchGitHubStars() {
-        try {
-            const response = await fetch('https://api.github.com/repos/devcodemuni/eMark');
-            if (!response.ok) throw new Error('Failed to fetch GitHub data');
-            const data = await response.json();
-            
-            // Update star count in header
-            const starCount = document.getElementById('star-count');
-            const mobileStarCount = document.getElementById('mobile-star-count');
-            if (starCount) starCount.textContent = data.stargazers_count.toLocaleString();
-            if (mobileStarCount) mobileStarCount.textContent = data.stargazers_count.toLocaleString();
-        } catch (error) {
-            console.error('Error fetching GitHub stars:', error);
+        // GitHub Stars Counter
+        async function fetchGitHubStars() {
+            try {
+                const response = await fetch('https://api.github.com/repos/devcodemuni/eMark');
+                if (!response.ok) throw new Error('Failed to fetch GitHub data');
+                const data = await response.json();
+
+                // Update star count in header
+                const starCount = document.getElementById('star-count');
+                const mobileStarCount = document.getElementById('mobile-star-count');
+                if (starCount) starCount.textContent = data.stargazers_count.toLocaleString();
+                if (mobileStarCount) mobileStarCount.textContent = data.stargazers_count.toLocaleString();
+            } catch (error) {
+                console.error('Error fetching GitHub stars:', error);
+            }
         }
-    }
 
-    // Load GitHub Repositories
-    const repoContainer = document.getElementById('repos');
-    const loading = document.getElementById('loading');
-    const error = document.getElementById('error');
+        // Load GitHub Repositories
+        const repoContainer = document.getElementById('repos');
+        const loading = document.getElementById('loading');
+        const error = document.getElementById('error');
 
-    async function loadRepos() {
-        loading.classList.remove('hidden');
-        error.classList.add('hidden');
-        repoContainer.innerHTML = '';
-        
-        try {
-            const res = await fetch("https://api.github.com/users/devcodemuni/repos?sort=updated&per_page=30");
-            if (!res.ok) throw new Error('Failed to fetch repositories');
-            const repos = await res.json();
+        async function loadRepos() {
+            loading.classList.remove('hidden');
+            error.classList.add('hidden');
+            repoContainer.innerHTML = '';
 
-            repos.forEach((repo, index) => {
-                const language = repo.language ?
-                    `<span class="inline-block px-3 py-1 bg-indigo-900/30 text-indigo-200 text-xs rounded-full border border-indigo-500/20">
+            try {
+                const res = await fetch("https://api.github.com/users/devcodemuni/repos?sort=updated&per_page=30");
+                if (!res.ok) throw new Error('Failed to fetch repositories');
+                const repos = await res.json();
+
+                repos.forEach((repo, index) => {
+                    const language = repo.language ?
+                        `<span class="inline-block px-3 py-1 bg-indigo-900/30 text-indigo-200 text-xs rounded-full border border-indigo-500/20">
                         ${repo.language}
                     </span>` : '';
 
-                const repoCard = document.createElement('div');
-                repoCard.className = 'repo-card glass-effect rounded-2xl p-8 border border-slate-700/50';
-                repoCard.style.opacity = '0';
-                repoCard.style.transform = 'translateY(20px)';
-                
-                // Animate cards with staggered delay
-                setTimeout(() => {
-                    repoCard.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
-                    repoCard.style.opacity = '1';
-                    repoCard.style.transform = 'translateY(0)';
-                }, 100 + (index % 3) * 100);
-                
-                repoCard.innerHTML = `
+                    const repoCard = document.createElement('div');
+                    repoCard.className = 'repo-card glass-effect rounded-2xl p-8 border border-slate-700/50';
+                    repoCard.style.opacity = '0';
+                    repoCard.style.transform = 'translateY(20px)';
+
+                    // Animate cards with staggered delay
+                    setTimeout(() => {
+                        repoCard.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+                        repoCard.style.opacity = '1';
+                        repoCard.style.transform = 'translateY(0)';
+                    }, 100 + (index % 3) * 100);
+
+                    repoCard.innerHTML = `
                     <div class="flex items-center gap-3 mb-4">
                         <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-600/20 to-purple-600/20 flex items-center justify-center">
                             <i class="fab fa-github text-xl text-indigo-400"></i>
@@ -359,27 +401,27 @@
                         </a>
                     </div>
                 `;
-                
-                repoContainer.appendChild(repoCard);
-            });
-            
-            loading.classList.add('hidden');
-        } catch (err) {
-            console.error('Error loading repositories:', err);
-            loading.classList.add('hidden');
-            error.classList.remove('hidden');
+
+                    repoContainer.appendChild(repoCard);
+                });
+
+                loading.classList.add('hidden');
+            } catch (err) {
+                console.error('Error loading repositories:', err);
+                loading.classList.add('hidden');
+                error.classList.remove('hidden');
+            }
         }
-    }
-    
-    function formatDate(dateString) {
-        const date = new Date(dateString);
-        return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-    }
-    
-    // Add animation for floating elements
-    document.addEventListener('DOMContentLoaded', () => {
-        const style = document.createElement('style');
-        style.textContent = `
+
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+        }
+
+        // Add animation for floating elements
+        document.addEventListener('DOMContentLoaded', () => {
+            const style = document.createElement('style');
+            style.textContent = `
             @keyframes float {
                 0% { transform: translateY(0px) rotate(0deg); }
                 50% { transform: translateY(-15px) rotate(5deg); }
@@ -389,8 +431,9 @@
                 animation: float 6s ease-in-out infinite;
             }
         `;
-        document.head.appendChild(style);
-    });
-</script>
+            document.head.appendChild(style);
+        });
+    </script>
 </body>
+
 </html>

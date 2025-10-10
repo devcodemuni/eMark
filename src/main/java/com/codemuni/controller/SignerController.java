@@ -41,6 +41,7 @@ public class SignerController {
     private String pdfPassword;
     private int pageNumber;
     private int[] coordinates;
+    private String existingFieldName; // For signing existing signature fields
     private List<KeystoreAndCertificateInfo> keystoreAndCertificateInfos;
     private KeystoreAndCertificateInfo keystoreAndCertificateInfo;
     private PKCS12KeyStoreProvider pkcs12KeyStoreProvider;
@@ -66,6 +67,14 @@ public class SignerController {
 
     public void setCoordinates(int[] coordinates) {
         this.coordinates = coordinates;
+    }
+
+    public void setExistingFieldName(String existingFieldName) {
+        this.existingFieldName = existingFieldName;
+    }
+
+    public String getExistingFieldName() {
+        return existingFieldName;
     }
 
     /**
@@ -109,8 +118,17 @@ public class SignerController {
         } catch (BadElementException | IOException ignore) {
         }
 
-        appearanceOptions.setPageNumber(pageNumber);
-        appearanceOptions.setCoordinates(coordinates);
+        // Check if we're signing an existing field or creating a new one
+        if (existingFieldName != null && !existingFieldName.trim().isEmpty()) {
+            // Sign into existing signature field
+            appearanceOptions.setExistingFieldName(existingFieldName);
+            log.info("Signing into existing field: " + existingFieldName);
+        } else {
+            // Create new signature field at specified coordinates
+            appearanceOptions.setPageNumber(pageNumber);
+            appearanceOptions.setCoordinates(coordinates);
+            log.info("Creating new signature field at page " + pageNumber);
+        }
 
 
         signerService.setSelectedFile(selectedFile);
