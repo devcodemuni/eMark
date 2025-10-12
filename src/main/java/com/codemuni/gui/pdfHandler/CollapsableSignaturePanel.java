@@ -1,13 +1,10 @@
 package com.codemuni.gui.pdfHandler;
 
-import com.codemuni.core.keyStoresProvider.X509SubjectUtils;
-import com.codemuni.service.SignatureVerificationService;
 import com.codemuni.service.SignatureVerificationService.SignatureVerificationResult;
 import com.codemuni.service.SignatureVerificationService.VerificationStatus;
 import com.codemuni.utils.IconGenerator;
 import com.codemuni.utils.IconLoader;
 import com.codemuni.utils.SignatureColors;
-import com.formdev.flatlaf.ui.FlatUIUtils;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -33,9 +30,9 @@ public class CollapsableSignaturePanel extends JPanel {
     private static final int ICON_SIZE = 16;
 
     // Icon files
-    private static final String ICON_VALID = "green_tick.png";
-    private static final String ICON_INFO = "info.png";
-    private static final String ICON_CERTIFICATE = "certificate.png";
+    private static final String ICON_VALID = "check_circle.png";
+    private static final String ICON_INVALID = "cross_circle.png";
+    private static final String ICON_UNKNOWN = "question_circle.png";
 
     // Date format for signature items (shared across all items)
     private static final SimpleDateFormat SIGNATURE_DATE_FORMAT = new SimpleDateFormat("MMM dd, yyyy HH:mm");
@@ -45,7 +42,7 @@ public class CollapsableSignaturePanel extends JPanel {
     private final JPanel signaturesListPanel;
     private final JLabel emptyLabel;
 
-    private boolean visible = true;
+    private final boolean visible = true;
     private boolean closed = true; // Initially hidden as per requirement
     private Timer animationTimer;
     private int currentWidth = 0; // Start with 0 width since initially hidden
@@ -55,13 +52,6 @@ public class CollapsableSignaturePanel extends JPanel {
     private Runnable onVerifyAllCallback;
     private JLabel verificationStatusLabel; // For showing verification progress
     private SignatureSelectionListener signatureSelectionListener; // For highlighting signature rectangles
-
-    /**
-     * Listener interface for signature selection events.
-     */
-    public interface SignatureSelectionListener {
-        void onSignatureSelected(String fieldName);
-    }
 
     public CollapsableSignaturePanel() {
         setLayout(new BorderLayout());
@@ -121,7 +111,7 @@ public class CollapsableSignaturePanel extends JPanel {
         leftPanel.setLayout(new BoxLayout(leftPanel, BoxLayout.Y_AXIS));
         leftPanel.setOpaque(false);
 
-        JLabel titleLabel = new JLabel("Signatures");
+        JLabel titleLabel = new JLabel("Signature Panel");
         titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 16));
         titleLabel.setForeground(Color.WHITE);
         titleLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -150,8 +140,8 @@ public class CollapsableSignaturePanel extends JPanel {
         verifyAllBtn.setToolTipText("Verify All Signatures");
 
         verifyAllBtn.addMouseListener(new MouseAdapter() {
-            private ImageIcon normalIcon = IconGenerator.createVerifyAllIcon(16, Color.LIGHT_GRAY);
-            private ImageIcon hoverIcon = IconGenerator.createVerifyAllIcon(16, SignatureColors.VALID_COLOR);
+            private final ImageIcon normalIcon = IconGenerator.createVerifyAllIcon(16, Color.LIGHT_GRAY);
+            private final ImageIcon hoverIcon = IconGenerator.createVerifyAllIcon(16, SignatureColors.VALID_COLOR);
 
             @Override
             public void mouseEntered(MouseEvent e) {
@@ -211,7 +201,7 @@ public class CollapsableSignaturePanel extends JPanel {
     /**
      * Closes the panel with smooth animation.
      */
-    private void closePanel() {
+    public void closePanel() {
         if (closed) return;
 
         closed = true;
@@ -416,6 +406,13 @@ public class CollapsableSignaturePanel extends JPanel {
     }
 
     /**
+     * Listener interface for signature selection events.
+     */
+    public interface SignatureSelectionListener {
+        void onSignatureSelected(String fieldName);
+    }
+
+    /**
      * Individual signature item (compact for overlay).
      */
     private class SignatureItem extends JPanel {
@@ -435,10 +432,10 @@ public class CollapsableSignaturePanel extends JPanel {
                     BorderFactory.createMatteBorder(0, 4, 0, 0, signatureColor), // Left color bar
                     BorderFactory.createCompoundBorder(
                             BorderFactory.createLineBorder(SignatureColors.BORDER_COLOR, 1),
-                            new EmptyBorder(8, 10, 8, 10)
+                            new EmptyBorder(8, 8, 8, 8)
                     )
             ));
-            setMaximumSize(new Dimension(Integer.MAX_VALUE, 200));
+            setMaximumSize(new Dimension(Integer.MAX_VALUE, 280));
 
             // Main content panel
             JPanel mainPanel = createMainPanel();
@@ -467,98 +464,189 @@ public class CollapsableSignaturePanel extends JPanel {
             });
         }
 
+
         private JPanel createMainPanel() {
             JPanel panel = new JPanel();
             panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
             panel.setOpaque(false);
 
-            // === TOP: Signer name and status icon ===
-            JPanel topPanel = new JPanel(new BorderLayout(8, 0));
-            topPanel.setOpaque(false);
-            topPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
+            // === Header with name, status, and View Details button ===
+            JPanel headerPanel = new JPanel(new BorderLayout(0, 0));
+            headerPanel.setOpaque(false);
+            headerPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-            // Status icon
             JLabel statusIcon = createStatusIcon();
-            topPanel.add(statusIcon, BorderLayout.WEST);
+            headerPanel.add(statusIcon, BorderLayout.WEST);
 
-            // Signer name
-            String signerName = X509SubjectUtils.extractCommonNameFromDN(result.getCertificateSubject());
-            if (signerName == null || signerName.isEmpty()) {
-                signerName = result.getFieldName();
-            }
-
-            JLabel nameLabel = new JLabel(truncateText(signerName, 25));
-            nameLabel.setFont(new Font("Segoe UI", Font.BOLD, 13));
+            JLabel nameLabel = new JLabel(result.getFieldName());
+            nameLabel.setFont(new Font("Segoe UI", Font.BOLD, 14));
             nameLabel.setForeground(Color.WHITE);
-            topPanel.add(nameLabel, BorderLayout.CENTER);
+            headerPanel.add(nameLabel, BorderLayout.CENTER);
 
-            panel.add(topPanel);
-            panel.add(Box.createRigidArea(new Dimension(0, 6)));
+            // View Details button in header (using default UI)
+            JLabel propertiesBtn = new JLabel("More Details");
+            propertiesBtn.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+            propertiesBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+            propertiesBtn.setForeground(new Color(0, 102, 204)); // link color
 
-            // === ESSENTIAL VERIFICATION INFO ===
-            JPanel essentialInfo = new JPanel();
-            essentialInfo.setLayout(new BoxLayout(essentialInfo, BoxLayout.Y_AXIS));
-            essentialInfo.setOpaque(false);
-            essentialInfo.setAlignmentX(Component.LEFT_ALIGNMENT);
+            propertiesBtn.addMouseListener(new MouseAdapter() {
+                @Override
+                public void mouseClicked(MouseEvent e) {
+                    showDetailedProperties();
+                }
 
-            // Simple, easy-to-understand labels
-            addCompactStatusRow(essentialInfo, "Signature:", result.isSignatureValid());
+                @Override
+                public void mouseEntered(MouseEvent e) {
+                    propertiesBtn.setText("<html><u>More Details</u></html>"); // underline on hover
+                }
 
-            // Tamper Status (Document Intact)
-            addCompactStatusRow(essentialInfo, "Document:", result.isDocumentIntact());
+                @Override
+                public void mouseExited(MouseEvent e) {
+                    propertiesBtn.setText("More Details"); // remove underline
+                }
+            });
 
-            // Timestamp Enabled
-            addCompactStatusRow(essentialInfo, "Timestamp:", result.isTimestampValid());
+            headerPanel.add(propertiesBtn, BorderLayout.EAST);
 
-            // LTV Enabled
-            addCompactStatusRow(essentialInfo, "Long Term:", result.hasLTV());
 
-            panel.add(essentialInfo);
+
+            panel.add(headerPanel);
             panel.add(Box.createRigidArea(new Dimension(0, 8)));
 
-            // === SIGNATURE PROPERTIES BUTTON ===
-            JButton propertiesBtn = new JButton("Signature Properties");
-            propertiesBtn.setFont(new Font("Segoe UI", Font.BOLD, 10));
-            propertiesBtn.setFocusPainted(false);
-            propertiesBtn.setAlignmentX(Component.LEFT_ALIGNMENT);
-            propertiesBtn.setMaximumSize(new Dimension(160, 26));
-            propertiesBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-            propertiesBtn.addActionListener(e -> showDetailedProperties());
-            panel.add(propertiesBtn);
+            // === Summary Message and Verification Details in one row ===
+            JPanel summaryRow = getSummaryPanel();
+
+            panel.add(summaryRow);
+            panel.add(Box.createRigidArea(new Dimension(0, 6)));
+
+            JPanel verificationDetailsPanel = createVerificationDetailsPanel(result);
+            verificationDetailsPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
+            panel.add(verificationDetailsPanel);
 
             return panel;
         }
 
-        /**
-         * Adds a compact status row with icon (for essential info display).
-         */
-        private void addCompactStatusRow(JPanel panel, String label, boolean status) {
-            JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 1));
+        private JPanel getSummaryPanel() {
+            JPanel summaryRow = new JPanel(new BorderLayout(2, 0));
+            summaryRow.setOpaque(false);
+            summaryRow.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+            JLabel summaryLabel = getSummaryLabel();
+
+            JLabel detailsTitle = new JLabel("Verification Details:");
+            detailsTitle.setFont(new Font("Segoe UI", Font.BOLD, 11));
+            detailsTitle.setForeground(Color.GRAY);
+
+            summaryRow.add(summaryLabel, BorderLayout.EAST);
+            summaryRow.add(detailsTitle, BorderLayout.WEST);
+            return summaryRow;
+        }
+
+        private JLabel getSummaryLabel() {
+            JLabel summaryLabel = new JLabel();
+            summaryLabel.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+
+            // Adobe Reader DC style messages with priority order
+            if (result.getOverallStatus() == VerificationStatus.VALID) {
+                summaryLabel.setText("Signature is valid and trusted.");
+                summaryLabel.setForeground(SignatureColors.VALID_COLOR);
+            } else if (result.getOverallStatus() == VerificationStatus.INVALID) {
+                // Provide specific reason for invalidity in priority order
+                // Priority: Document Integrity > Signature > Revocation > Certificate Validity
+                if (!result.isDocumentIntact()) {
+                    summaryLabel.setText("Document has been modified after signing.");
+                } else if (!result.isSignatureValid()) {
+                    summaryLabel.setText("Signature is invalid or corrupted.");
+                } else if (result.isCertificateRevoked()) {
+                    summaryLabel.setText("Certificate has been revoked.");
+                } else if (!result.isCertificateValid()) {
+                    summaryLabel.setText("Certificate has expired or is not yet valid.");
+                } else {
+                    summaryLabel.setText("Signature verification failed.");
+                }
+                summaryLabel.setForeground(SignatureColors.INVALID_COLOR);
+            } else {
+                // UNKNOWN status - usually means valid but not trusted
+                if (result.isSignatureValid() && result.isDocumentIntact() && !result.isCertificateTrusted()) {
+                    summaryLabel.setText("Signature is valid but identity could not be verified.");
+                } else {
+                    summaryLabel.setText("Verification status is unknown.");
+                }
+                summaryLabel.setForeground(SignatureColors.UNKNOWN_COLOR);
+            }
+            return summaryLabel;
+        }
+
+        private JPanel createVerificationDetailsPanel(SignatureVerificationResult result) {
+            JPanel detailsPanel = new JPanel();
+            detailsPanel.setLayout(new BoxLayout(detailsPanel, BoxLayout.Y_AXIS));
+            detailsPanel.setOpaque(false);
+            // Added 10px left padding as requested
+            detailsPanel.setBorder(new EmptyBorder(4, 10, 4, 0));
+
+            // Core verification checks (Adobe Reader DC order)
+            addCompactStatusRow(detailsPanel, "Signature Verified:", result.isSignatureValid(), false);
+            addCompactStatusRow(detailsPanel, "Document Unchanged:", result.isDocumentIntact(), false);
+            addCompactStatusRow(detailsPanel, "Certificate Valid:", result.isCertificateValid(), false);
+            addCompactStatusRow(detailsPanel, "Certificate Trusted:", result.isCertificateTrusted(), false);
+            
+            // Optional features (show as enabled/not enabled)
+            addCompactStatusRow(detailsPanel, "Timestamp:", result.isTimestampValid(), true);
+            addCompactStatusRow(detailsPanel, "Long-Term Validation:", result.hasLTV(), true);
+
+            return detailsPanel;
+        }
+
+        private void addCompactStatusRow(JPanel panel, String label, boolean status, boolean isIncludedType) {
+            JPanel row = new JPanel(new GridBagLayout());
             row.setOpaque(false);
             row.setAlignmentX(Component.LEFT_ALIGNMENT);
-            row.setMaximumSize(new Dimension(300, 18));
+            row.setBorder(new EmptyBorder(3, 0, 3, 0));
+            row.setMaximumSize(new Dimension(Integer.MAX_VALUE, 24));
 
-            JLabel labelComp = new JLabel(label);
-            labelComp.setFont(new Font("Segoe UI", Font.PLAIN, 10));
-            labelComp.setForeground(Color.LIGHT_GRAY);
+            GridBagConstraints gbc = new GridBagConstraints();
+            gbc.anchor = GridBagConstraints.WEST;
+            gbc.fill = GridBagConstraints.NONE;
+            gbc.insets = new Insets(0, 0, 0, 6);
 
-            // Use small icon for status
-            ImageIcon statusIcon = status ?
-                IconLoader.loadIcon(ICON_VALID, 12, 12) :
-                createCrossIcon(12);
+            // Icon (✔ or ✖)
+            JLabel iconLabel = new JLabel(status
+                    ? IconLoader.loadIcon(ICON_VALID, 14, 14)
+                    : IconLoader.loadIcon(ICON_INVALID, 14, 14));
+            gbc.gridx = 0;
+            gbc.weightx = 0;
+            row.add(iconLabel, gbc);
 
-            JLabel iconLabel = new JLabel(statusIcon);
+            // Label text (left)
+            JLabel labelText = new JLabel(label);
+            labelText.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+            labelText.setForeground(new Color(200, 200, 200));
+            gbc.gridx = 1;
+            gbc.weightx = 1.0;
+            gbc.fill = GridBagConstraints.HORIZONTAL;
+            row.add(labelText, gbc);
 
-            JLabel valueText = new JLabel(status ? "Yes" : "No");
-            valueText.setFont(new Font("Segoe UI", Font.PLAIN, 10));
-            valueText.setForeground(status ? SignatureColors.VALID_COLOR : SignatureColors.INVALID_COLOR);
+            // Value text (right aligned)
+            String value;
+            if (isIncludedType) {
+                value = status ? "Enabled" : "Not Enabled";
+            } else {
+                value = status ? "Yes" : "No";
+            }
 
-            row.add(labelComp);
-            row.add(iconLabel);
-            row.add(valueText);
+            JLabel valueLabel = new JLabel(value);
+            valueLabel.setFont(new Font("Segoe UI", Font.BOLD, 11));
+            valueLabel.setForeground(status ? new Color(90, 220, 120) : new Color(255, 100, 100));
+            valueLabel.setHorizontalAlignment(SwingConstants.RIGHT);
+            gbc.gridx = 2;
+            gbc.weightx = 0;
+            gbc.fill = GridBagConstraints.NONE;
+            gbc.insets = new Insets(0, 6, 0, 0);
+            row.add(valueLabel, gbc);
 
             panel.add(row);
         }
+
 
         /**
          * Shows detailed signature properties dialog.
@@ -567,30 +655,10 @@ public class CollapsableSignaturePanel extends JPanel {
             Frame parentFrame = (Frame) SwingUtilities.getWindowAncestor(this);
             if (parentFrame != null) {
                 SignaturePropertiesDialog dialog = new SignaturePropertiesDialog(
-                    parentFrame, result, signatureColor);
+                        parentFrame, result, signatureColor);
                 dialog.setVisible(true);
             }
         }
-
-
-        /**
-         * Creates a red cross icon for invalid status.
-         */
-        private ImageIcon createCrossIcon(int size) {
-            java.awt.image.BufferedImage img = new java.awt.image.BufferedImage(size, size, java.awt.image.BufferedImage.TYPE_INT_ARGB);
-            Graphics2D g2d = img.createGraphics();
-            g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            g2d.setColor(SignatureColors.INVALID_COLOR);
-            g2d.setStroke(new BasicStroke(2f));
-
-            int padding = 2;
-            g2d.drawLine(padding, padding, size - padding, size - padding);
-            g2d.drawLine(size - padding, padding, padding, size - padding);
-
-            g2d.dispose();
-            return new ImageIcon(img);
-        }
-
 
         private JLabel createStatusIcon() {
             VerificationStatus status = result.getOverallStatus();
@@ -600,14 +668,11 @@ public class CollapsableSignaturePanel extends JPanel {
                 case VALID:
                     icon = IconLoader.loadIcon(ICON_VALID, 24, 24);
                     break;
-                case UNKNOWN:
-                    icon = createQuestionIcon(24);
-                    break;
                 case INVALID:
-                    icon = createCrossIcon(24);
+                    icon = IconLoader.loadIcon(ICON_INVALID, 24, 24);
                     break;
                 default:
-                    icon = createQuestionIcon(24);
+                    icon = IconLoader.loadIcon(ICON_UNKNOWN, 24, 24);
             }
 
             JLabel iconLabel = new JLabel(icon);

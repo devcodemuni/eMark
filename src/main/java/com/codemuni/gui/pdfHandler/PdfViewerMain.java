@@ -51,8 +51,8 @@ public class PdfViewerMain extends JFrame {
     private final SignerController signerController = new SignerController();
     private final CollapsableSignaturePanel signaturePanel;
     private final SignatureVerificationService verificationService;
-    private final FloatingSignatureButton floatingButton;
     private final SignatureColorManager colorManager;
+    private final SignatureVerificationBanner verificationBanner;
     private JLayeredPane layeredPane;
 
     // State
@@ -98,16 +98,31 @@ public class PdfViewerMain extends JFrame {
                 topBar::setPageInfoText // callback to update page label
         );
         placeholderPanel = new PlaceholderPanel(this::openPdf);
+
+        // Initialize verification banner first
+        verificationBanner = new SignatureVerificationBanner();
+
+        // Initialize signature panel
         signaturePanel = new CollapsableSignaturePanel();
         signaturePanel.setColorManager(colorManager); // Set color manager for color coding
-        signaturePanel.setOnCloseCallback(this::layoutOverlayComponents); // Update layout when panel closes
-        signaturePanel.setSignatureSelectionListener(fieldName -> {
-            // Requirement 4: Highlight signature rectangle when selected from panel
-            pdfRendererService.highlightSignatureOnOverlay(fieldName);
-        });
+        signaturePanel.setOnCloseCallback(() -> {
+            // Update banner button state when panel is closed
+            verificationBanner.setButtonSelected(false);
+            layoutOverlayComponents();
+        }); // Update layout when panel closes
+        // Requirement 4: Highlight signature rectangle when selected from panel
+        signaturePanel.setSignatureSelectionListener(pdfRendererService::highlightSignatureOnOverlay);
         signaturePanel.setOnVerifyAllCallback(this::verifyAllSignatures);
-        floatingButton = new FloatingSignatureButton(() -> {
-            signaturePanel.openPanel();
+
+        // Connect signature button in banner to toggle signature panel
+        verificationBanner.setSignatureButtonAction(() -> {
+            if (signaturePanel.isClosed()) {
+                signaturePanel.openPanel();
+                verificationBanner.setButtonSelected(true);
+            } else {
+                signaturePanel.closePanel();
+                verificationBanner.setButtonSelected(false);
+            }
             layoutOverlayComponents();
         });
 
@@ -115,9 +130,14 @@ public class PdfViewerMain extends JFrame {
         layeredPane = new JLayeredPane();
         layeredPane.setLayout(null); // Absolute positioning for overlay
 
+        // Create container panel for banner and layered pane
+        JPanel centerContainer = new JPanel(new BorderLayout());
+        centerContainer.add(verificationBanner, BorderLayout.NORTH);
+        centerContainer.add(layeredPane, BorderLayout.CENTER);
+
         setLayout(new BorderLayout());
         add(topBar, BorderLayout.NORTH);
-        add(layeredPane, BorderLayout.CENTER);
+        add(centerContainer, BorderLayout.CENTER);
 
         // Add component listener to handle resizing
         layeredPane.addComponentListener(new java.awt.event.ComponentAdapter() {
@@ -165,28 +185,12 @@ public class PdfViewerMain extends JFrame {
             signaturePanel.setBounds(width, 0, 0, height);
         }
 
-        // Floating button (shown when signature panel is closed) - TOP RIGHT corner
-        int buttonWidth = floatingButton.getPreferredSize().width;
-        int buttonHeight = floatingButton.getPreferredSize().height;
-        int buttonX = width - buttonWidth - 15; // 15px margin from right
-        int buttonY = 10; // 10px from top
-        floatingButton.setBounds(buttonX, buttonY, buttonWidth, buttonHeight);
-
-        // Show/hide floating button based on panel state
-        // Only show if there's content to show (signatures exist)
-        boolean shouldShowButton = signaturePanel.isClosed() &&
-                                  signaturePanel.getParent() != null;
-        floatingButton.setVisible(shouldShowButton);
-
         // Ensure components are in layered pane
         if (pdfScrollPane.getParent() != layeredPane) {
             layeredPane.add(pdfScrollPane, Integer.valueOf(JLayeredPane.DEFAULT_LAYER));
         }
         if (signaturePanel.getParent() != layeredPane) {
             layeredPane.add(signaturePanel, Integer.valueOf(JLayeredPane.PALETTE_LAYER));
-        }
-        if (floatingButton.getParent() != layeredPane) {
-            layeredPane.add(floatingButton, Integer.valueOf(JLayeredPane.MODAL_LAYER));
         }
 
         layeredPane.revalidate();
@@ -215,7 +219,7 @@ public class PdfViewerMain extends JFrame {
             topBar.setPageInfoText("");
             signaturePanel.clearSignatures();
             signaturePanel.setVisible(false); // Hide signature panel when no PDF
-            floatingButton.setVisible(false); // Hide floating button when no PDF
+            verificationBanner.hideBanner(); // Hide verification banner when no PDF
         } else {
             pdfScrollPane.setViewportView(pdfScrollPane.getPdfPanel());
             topBar.setSignButtonVisible(true);
@@ -297,8 +301,9 @@ public class PdfViewerMain extends JFrame {
         // Reset color manager for new PDF
         colorManager.reset();
 
-        // Requirement 8: Show verification progress in panel header
+        // Show verification progress in banner and panel
         SwingUtilities.invokeLater(() -> {
+            verificationBanner.showVerifying();
             if (signaturePanel.isVisible()) {
                 signaturePanel.setVerificationStatus("Verifying signatures...");
             }
@@ -309,7 +314,7 @@ public class PdfViewerMain extends JFrame {
             try {
                 // Set progress listener for visual feedback
                 verificationService.setProgressListener(message ->
-                    SwingUtilities.invokeLater(() -> signaturePanel.setVerificationStatus(message))
+                        SwingUtilities.invokeLater(() -> signaturePanel.setVerificationStatus(message))
                 );
 
                 List<SignatureVerificationService.SignatureVerificationResult> results =
@@ -326,15 +331,18 @@ public class PdfViewerMain extends JFrame {
                         signaturePanel.setVisible(true); // Make toggle button visible
                         // Note: Panel remains closed, user can click toggle to open
 
+                        // Update verification banner with results
+                        verificationBanner.updateStatus(results);
+
                         // Draw colored rectangles on PDF pages
                         drawSignatureRectangles(results);
 
                         log.info("Signature panel updated with " + results.size() + " signature(s)");
                     } else {
-                        // PDF is not signed - hide signature panel
+                        // PDF is not signed - hide signature panel and banner
                         signaturePanel.clearSignatures();
                         signaturePanel.setVisible(false);
-                        floatingButton.setVisible(false);
+                        verificationBanner.hideBanner();
                         log.info("No signatures found - signature panel hidden");
                     }
                     layoutOverlayComponents();
@@ -345,7 +353,7 @@ public class PdfViewerMain extends JFrame {
                     signaturePanel.setVerificationStatus("Verification failed");
                     signaturePanel.clearSignatures();
                     signaturePanel.setVisible(false);
-                    floatingButton.setVisible(false);
+                    verificationBanner.hideBanner();
                     layoutOverlayComponents();
                 });
             }
@@ -370,7 +378,7 @@ public class PdfViewerMain extends JFrame {
             try {
                 // Set progress listener for visual feedback
                 verificationService.setProgressListener(message ->
-                    SwingUtilities.invokeLater(() -> signaturePanel.setVerificationStatus(message))
+                        SwingUtilities.invokeLater(() -> signaturePanel.setVerificationStatus(message))
                 );
 
                 List<SignatureVerificationService.SignatureVerificationResult> results =
@@ -382,6 +390,9 @@ public class PdfViewerMain extends JFrame {
 
                     if (results != null && !results.isEmpty()) {
                         signaturePanel.updateSignatures(results);
+
+                        // Update verification banner with new results
+                        verificationBanner.updateStatus(results);
 
                         // Redraw signature rectangles
                         pdfRendererService.hideSignedSignatureOverlays();

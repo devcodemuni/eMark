@@ -34,13 +34,14 @@ public class SignModeController {
     private static final Color HANDLE_BORDER_COLOR = new Color(66, 133, 244, 255);
     private static final Color MARKER_COLOR = new Color(66, 133, 244, 180);
     private static final Color CENTER_POINT_COLOR = new Color(66, 133, 244, 150);
-    private static final Color DRAG_FEEDBACK_COLOR = new Color(66, 133, 244, 100);
     private static final Color GRID_COLOR_MINOR = new Color(128, 128, 128, 30);
     private static final Color GRID_COLOR_MAJOR = new Color(128, 128, 128, 50);
-    private static final Color INFO_BG_COLOR = new Color(40, 40, 40, 220);
-    private static final Color INFO_BORDER_COLOR = new Color(66, 133, 244, 100);
-    private static final Color INFO_TEXT_PRIMARY = new Color(220, 220, 220);
-    private static final Color INFO_TEXT_SECONDARY = new Color(180, 180, 180);
+    private static final BasicStroke GRID_STROKE_MINOR = new BasicStroke(0.5f);
+    private static final BasicStroke GRID_STROKE_MAJOR = new BasicStroke(0.8f);
+    private static final BasicStroke BORDER_STROKE = new BasicStroke(2f);
+    private static final BasicStroke HANDLE_STROKE = new BasicStroke(2f);
+    private static final BasicStroke MARKER_STROKE = new BasicStroke(1.5f, BasicStroke.CAP_SQUARE, BasicStroke.JOIN_MITER);
+    private static final BasicStroke CENTER_STROKE = new BasicStroke(1f);
 
     private final PdfViewerMain owner;
     private final PdfRendererService rendererService;
@@ -60,12 +61,12 @@ public class SignModeController {
     private volatile boolean isSigningInProgress = false;
 
     // Professional drawing features
-    private static final int GRID_SIZE = 20; // Grid spacing in pixels
-    private static final int HANDLE_SIZE = 8; // Size of resize handles
+    private static final int GRID_SIZE = 4;
+    private static final int HANDLE_SIZE = 4;
+    private static final int MARKER_LENGTH = 15;
+    private static final int CENTER_SIZE = 4;
 
-    private boolean showGrid = false; // Grid disabled by default
-    private boolean snapToGrid = true;
-    private Point currentMousePos = null;
+    private boolean showGrid = true;
     private boolean lockAspectRatio = false;
 
     public SignModeController(
@@ -99,39 +100,39 @@ public class SignModeController {
 
                     case KeyEvent.VK_G:
                         showGrid = !showGrid;
-                        if (activePageLabel != null) activePageLabel.repaint();
+                        rendererService.getPdfPanel().repaint();
                         break;
 
-                    case KeyEvent.VK_S:
-                        if (e.isControlDown()) {
-                            snapToGrid = !snapToGrid;
-                            if (activePageLabel != null) activePageLabel.repaint();
-                        }
-                        break;
 
                     // Arrow keys for precise movement (when rectangle exists)
                     case KeyEvent.VK_UP:
-                        if (drawnRect != null) {
-                            drawnRect.y -= e.isShiftDown() ? 10 : 1;
-                            if (activePageLabel != null) activePageLabel.repaint();
+                        if (drawnRect != null && activePageLabel != null) {
+                            int delta = e.isShiftDown() ? 10 : 1;
+                            drawnRect.y = Math.max(0, drawnRect.y - delta);
+                            activePageLabel.repaint();
                         }
                         break;
                     case KeyEvent.VK_DOWN:
-                        if (drawnRect != null) {
-                            drawnRect.y += e.isShiftDown() ? 10 : 1;
-                            if (activePageLabel != null) activePageLabel.repaint();
+                        if (drawnRect != null && activePageLabel != null) {
+                            int delta = e.isShiftDown() ? 10 : 1;
+                            int maxY = activePageLabel.getHeight() - drawnRect.height;
+                            drawnRect.y = Math.min(maxY, drawnRect.y + delta);
+                            activePageLabel.repaint();
                         }
                         break;
                     case KeyEvent.VK_LEFT:
-                        if (drawnRect != null) {
-                            drawnRect.x -= e.isShiftDown() ? 10 : 1;
-                            if (activePageLabel != null) activePageLabel.repaint();
+                        if (drawnRect != null && activePageLabel != null) {
+                            int delta = e.isShiftDown() ? 10 : 1;
+                            drawnRect.x = Math.max(0, drawnRect.x - delta);
+                            activePageLabel.repaint();
                         }
                         break;
                     case KeyEvent.VK_RIGHT:
-                        if (drawnRect != null) {
-                            drawnRect.x += e.isShiftDown() ? 10 : 1;
-                            if (activePageLabel != null) activePageLabel.repaint();
+                        if (drawnRect != null && activePageLabel != null) {
+                            int delta = e.isShiftDown() ? 10 : 1;
+                            int maxX = activePageLabel.getWidth() - drawnRect.width;
+                            drawnRect.x = Math.min(maxX, drawnRect.x + delta);
+                            activePageLabel.repaint();
                         }
                         break;
                 }
@@ -303,8 +304,8 @@ public class SignModeController {
                     g2.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE);
                     g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
 
-                    // Draw grid when in sign mode (subtle, professional)
-                    if (signModeEnabled && showGrid && pageLabel == activePageLabel) {
+                    // Draw grid when in sign mode (subtle, professional) - show on all pages
+                    if (signModeEnabled && showGrid) {
                         drawGrid(g2, c);
                     }
 
@@ -316,19 +317,11 @@ public class SignModeController {
 
                         // Single clean border
                         g2.setColor(SELECTION_BORDER_COLOR);
-                        g2.setStroke(new BasicStroke(2f));
+                        g2.setStroke(BORDER_STROKE);
                         g2.draw(drawnRect);
 
-                        // Professional resize handles (8 handles: 4 corners + 4 edges)
-                        drawProfessionalResizeHandles(g2, drawnRect);
-
-                        // Minimalist corner markers (simple L-shapes)
-                        drawMinimalistCornerMarkers(g2, drawnRect);
-
-                        // Display dimensions and additional info
-                        drawEnhancedDimensionsInfo(g2, drawnRect, scale);
-
-                        // Draw center point for alignment
+                        drawResizeHandles(g2, drawnRect);
+                        drawCornerMarkers(g2, drawnRect);
                         drawCenterPoint(g2, drawnRect);
                     }
                 } finally {
@@ -336,145 +329,77 @@ public class SignModeController {
                 }
             }
 
-            private void drawProfessionalResizeHandles(Graphics2D g2, Rectangle rect) {
+            private void drawResizeHandles(Graphics2D g2, Rectangle rect) {
                 int halfSize = HANDLE_SIZE / 2;
-
-                // Define all 8 handle positions
                 int[][] handles = {
-                    {rect.x, rect.y}, // TL - Top Left
-                    {rect.x + rect.width, rect.y}, // TR - Top Right
-                    {rect.x, rect.y + rect.height}, // BL - Bottom Left
-                    {rect.x + rect.width, rect.y + rect.height}, // BR - Bottom Right
-                    {rect.x + rect.width / 2, rect.y}, // T - Top
-                    {rect.x + rect.width / 2, rect.y + rect.height}, // B - Bottom
-                    {rect.x, rect.y + rect.height / 2}, // L - Left
-                    {rect.x + rect.width, rect.y + rect.height / 2} // R - Right
+                    {rect.x, rect.y},
+                    {rect.x + rect.width, rect.y},
+                    {rect.x, rect.y + rect.height},
+                    {rect.x + rect.width, rect.y + rect.height},
+                    {rect.x + rect.width / 2, rect.y},
+                    {rect.x + rect.width / 2, rect.y + rect.height},
+                    {rect.x, rect.y + rect.height / 2},
+                    {rect.x + rect.width, rect.y + rect.height / 2}
                 };
 
+                g2.setStroke(HANDLE_STROKE);
                 for (int[] handle : handles) {
                     int x = handle[0] - halfSize;
                     int y = handle[1] - halfSize;
-
-                    // Fill - white for visibility
                     g2.setColor(HANDLE_FILL_COLOR);
                     g2.fillRect(x, y, HANDLE_SIZE, HANDLE_SIZE);
-
-                    // Border - blue to match theme
                     g2.setColor(HANDLE_BORDER_COLOR);
-                    g2.setStroke(new BasicStroke(2f));
                     g2.drawRect(x, y, HANDLE_SIZE, HANDLE_SIZE);
                 }
             }
 
-            private void drawMinimalistCornerMarkers(Graphics2D g2, Rectangle rect) {
-                int lineLength = 15; // Slightly longer for better visibility
-
+            private void drawCornerMarkers(Graphics2D g2, Rectangle rect) {
                 g2.setColor(MARKER_COLOR);
-                g2.setStroke(new BasicStroke(1.5f, BasicStroke.CAP_SQUARE, BasicStroke.JOIN_MITER));
-
-                // Top-left corner
-                g2.drawLine(rect.x, rect.y, rect.x + lineLength, rect.y);
-                g2.drawLine(rect.x, rect.y, rect.x, rect.y + lineLength);
-
-                // Top-right corner
-                g2.drawLine(rect.x + rect.width, rect.y, rect.x + rect.width - lineLength, rect.y);
-                g2.drawLine(rect.x + rect.width, rect.y, rect.x + rect.width, rect.y + lineLength);
-
-                // Bottom-left corner
-                g2.drawLine(rect.x, rect.y + rect.height, rect.x + lineLength, rect.y + rect.height);
-                g2.drawLine(rect.x, rect.y + rect.height, rect.x, rect.y + rect.height - lineLength);
-
-                // Bottom-right corner
-                g2.drawLine(rect.x + rect.width, rect.y + rect.height, rect.x + rect.width - lineLength, rect.y + rect.height);
-                g2.drawLine(rect.x + rect.width, rect.y + rect.height, rect.x + rect.width, rect.y + rect.height - lineLength);
+                g2.setStroke(MARKER_STROKE);
+                g2.drawLine(rect.x, rect.y, rect.x + MARKER_LENGTH, rect.y);
+                g2.drawLine(rect.x, rect.y, rect.x, rect.y + MARKER_LENGTH);
+                g2.drawLine(rect.x + rect.width, rect.y, rect.x + rect.width - MARKER_LENGTH, rect.y);
+                g2.drawLine(rect.x + rect.width, rect.y, rect.x + rect.width, rect.y + MARKER_LENGTH);
+                g2.drawLine(rect.x, rect.y + rect.height, rect.x + MARKER_LENGTH, rect.y + rect.height);
+                g2.drawLine(rect.x, rect.y + rect.height, rect.x, rect.y + rect.height - MARKER_LENGTH);
+                g2.drawLine(rect.x + rect.width, rect.y + rect.height, rect.x + rect.width - MARKER_LENGTH, rect.y + rect.height);
+                g2.drawLine(rect.x + rect.width, rect.y + rect.height, rect.x + rect.width, rect.y + rect.height - MARKER_LENGTH);
             }
 
             private void drawCenterPoint(Graphics2D g2, Rectangle rect) {
                 int centerX = rect.x + rect.width / 2;
                 int centerY = rect.y + rect.height / 2;
-                int size = 4;
-
-                // Small center crosshair
                 g2.setColor(CENTER_POINT_COLOR);
-                g2.setStroke(new BasicStroke(1f));
-                g2.drawLine(centerX - size, centerY, centerX + size, centerY);
-                g2.drawLine(centerX, centerY - size, centerX, centerY + size);
-
-                // Center dot
+                g2.setStroke(CENTER_STROKE);
+                g2.drawLine(centerX - CENTER_SIZE, centerY, centerX + CENTER_SIZE, centerY);
+                g2.drawLine(centerX, centerY - CENTER_SIZE, centerX, centerY + CENTER_SIZE);
                 g2.fillOval(centerX - 2, centerY - 2, 4, 4);
             }
 
             private void drawGrid(Graphics2D g2, JComponent c) {
                 int width = c.getWidth();
                 int height = c.getHeight();
+                int majorGrid = GRID_SIZE * 5;
 
-                // Subtle grid lines - professional and minimal
                 g2.setColor(GRID_COLOR_MINOR);
-                g2.setStroke(new BasicStroke(0.5f));
-
-                // Draw vertical lines
+                g2.setStroke(GRID_STROKE_MINOR);
                 for (int x = GRID_SIZE; x < width; x += GRID_SIZE) {
                     g2.drawLine(x, 0, x, height);
                 }
-
-                // Draw horizontal lines
                 for (int y = GRID_SIZE; y < height; y += GRID_SIZE) {
                     g2.drawLine(0, y, width, y);
                 }
 
-                // Major grid lines every 5 divisions - slightly more visible
                 g2.setColor(GRID_COLOR_MAJOR);
-                g2.setStroke(new BasicStroke(0.8f));
-                for (int x = GRID_SIZE * 5; x < width; x += GRID_SIZE * 5) {
+                g2.setStroke(GRID_STROKE_MAJOR);
+                for (int x = majorGrid; x < width; x += majorGrid) {
                     g2.drawLine(x, 0, x, height);
                 }
-                for (int y = GRID_SIZE * 5; y < height; y += GRID_SIZE * 5) {
+                for (int y = majorGrid; y < height; y += majorGrid) {
                     g2.drawLine(0, y, width, y);
                 }
             }
 
-            private void drawEnhancedDimensionsInfo(Graphics2D g2, Rectangle rect, float scale) {
-                int pdfWidth = Math.round(rect.width / scale);
-                int pdfHeight = Math.round(rect.height / scale);
-
-                // Create multi-line info
-                String line1 = pdfWidth + " × " + pdfHeight + " pt";
-                String line2 = "X:" + Math.round(rect.x / scale) + " Y:" + Math.round(rect.y / scale);
-                String statusText = lockAspectRatio ? " 🔒 " : "";
-
-                g2.setFont(new Font("SansSerif", Font.PLAIN, 10));
-                FontMetrics fm = g2.getFontMetrics();
-                int width1 = fm.stringWidth(line1);
-                int width2 = fm.stringWidth(line2 + statusText);
-                int maxWidth = Math.max(width1, width2);
-                int lineHeight = fm.getHeight();
-
-                int textX = rect.x + (rect.width - maxWidth) / 2;
-                int textY = rect.y - 10;
-
-                // Ensure text stays within bounds
-                if (textY - lineHeight * 2 < 0) {
-                    textY = rect.y + rect.height + lineHeight * 2 + 8;
-                }
-
-                // Professional dark badge
-                int padding = 7;
-                int badgeHeight = lineHeight * 2 + padding;
-                g2.setColor(INFO_BG_COLOR);
-                g2.fillRoundRect(textX - padding, textY - lineHeight * 2 + 2, maxWidth + padding * 2, badgeHeight, 8, 8);
-
-                // Subtle border
-                g2.setColor(INFO_BORDER_COLOR);
-                g2.setStroke(new BasicStroke(1f));
-                g2.drawRoundRect(textX - padding, textY - lineHeight * 2 + 2, maxWidth + padding * 2, badgeHeight, 8, 8);
-
-                // Text
-                g2.setColor(INFO_TEXT_PRIMARY);
-                g2.drawString(line1, textX + (maxWidth - width1) / 2, textY - lineHeight);
-                g2.setColor(INFO_TEXT_SECONDARY);
-                g2.setFont(new Font("SansSerif", Font.PLAIN, 9));
-                g2.drawString(line2 + statusText, textX + (maxWidth - width2) / 2, textY);
-            }
         });
 
         pageLabel.addMouseListener(new java.awt.event.MouseAdapter() {
@@ -568,52 +493,42 @@ public class SignModeController {
 
         pageLabel.addMouseMotionListener(new java.awt.event.MouseMotionAdapter() {
             @Override
-            public void mouseMoved(java.awt.event.MouseEvent e) {
-                if (!signModeEnabled || activePageLabel != pageLabel) return;
-
-                // Update mouse position for crosshair
-                Point oldPos = currentMousePos;
-                currentMousePos = snapToGrid ? snapToGrid(e.getPoint()) : e.getPoint();
-
-                // Repaint only if position changed
-                if (oldPos == null || !oldPos.equals(currentMousePos)) {
-                    pageLabel.repaint();
-                }
-            }
-
-            @Override
             public void mouseDragged(java.awt.event.MouseEvent e) {
                 if (!signModeEnabled || drawnRect == null || startPoint == null || activePageLabel != pageLabel)
                     return;
 
-                // Performance: Store old bounds for optimized repaint
                 Rectangle oldBounds = new Rectangle(drawnRect);
-
-                // Get current position with optional snap-to-grid
-                Point currentPos = snapToGrid ? snapToGrid(e.getPoint()) : e.getPoint();
-
-                int x = Math.min(startPoint.x, currentPos.x);
-                int y = Math.min(startPoint.y, currentPos.y);
-                int width = Math.abs(startPoint.x - currentPos.x);
-                int height = Math.abs(startPoint.y - currentPos.y);
-                drawnRect.setBounds(x, y, width, height);
-
-                // Performance: Only repaint the affected regions (old + new bounds + handles margin)
-                int margin = 50; // Extra margin for handles, shadow, and info box
+                
+                // Get page dimensions
+                int pageWidth = pageLabel.getWidth();
+                int pageHeight = pageLabel.getHeight();
+                
+                // Constrain current position to page boundaries
+                Point currentPos = e.getPoint();
+                int constrainedX = Math.max(0, Math.min(currentPos.x, pageWidth));
+                int constrainedY = Math.max(0, Math.min(currentPos.y, pageHeight));
+                
+                // Calculate rectangle bounds
+                int rectX = Math.min(startPoint.x, constrainedX);
+                int rectY = Math.min(startPoint.y, constrainedY);
+                int rectWidth = Math.abs(startPoint.x - constrainedX);
+                int rectHeight = Math.abs(startPoint.y - constrainedY);
+                
+                // Ensure rectangle doesn't exceed page boundaries
+                if (rectX + rectWidth > pageWidth) {
+                    rectWidth = pageWidth - rectX;
+                }
+                if (rectY + rectHeight > pageHeight) {
+                    rectHeight = pageHeight - rectY;
+                }
+                
+                drawnRect.setBounds(rectX, rectY, rectWidth, rectHeight);
+                
                 Rectangle repaintRegion = oldBounds.union(drawnRect);
-                repaintRegion.grow(margin, margin);
+                repaintRegion.grow(30, 30);
                 pageLabel.repaint(repaintRegion);
             }
         });
-    }
-
-    /**
-     * Snaps a point to the nearest grid intersection
-     */
-    private Point snapToGrid(Point p) {
-        int snappedX = Math.round((float) p.x / GRID_SIZE) * GRID_SIZE;
-        int snappedY = Math.round((float) p.y / GRID_SIZE) * GRID_SIZE;
-        return new Point(snappedX, snappedY);
     }
 
     /**

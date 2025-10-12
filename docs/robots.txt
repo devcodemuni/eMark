@@ -1,3 +1,21 @@
 User-agent: *
 Allow: /
+Disallow: /sw.js
+Disallow: /manifest.json
+Disallow: /browserconfig.xml
+
+# Specific bot rules
+User-agent: Googlebot
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+User-agent: Slurp
+Allow: /
+
+# Crawl-delay for general bots
+Crawl-delay: 1
+
+# Sitemap location
 Sitemap: https://devcodemuni.github.io/eMark/sitemap.xml

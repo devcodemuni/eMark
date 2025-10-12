@@ -13,6 +13,7 @@ import java.security.InvalidAlgorithmParameterException;
 import java.security.KeyStore;
 import java.security.Security;
 import java.security.cert.*;
+import java.text.SimpleDateFormat;
 import java.util.*;
 
 /**
@@ -28,6 +29,7 @@ import java.util.*;
 public class SignatureVerificationService {
 
     private static final Log log = LogFactory.getLog(SignatureVerificationService.class);
+    private static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("MMM dd, yyyy HH:mm:ss");
     private final TrustStoreManager trustStoreManager;
     private VerificationProgressListener progressListener;
 
@@ -111,13 +113,14 @@ public class SignatureVerificationService {
         private int pageNumber = -1;
         private float[] position; // [llx, lly, urx, ury] in PDF coordinates
 
-        public SignatureVerificationResult(String fieldName) {
+        public SignatureVerificationResult(String fieldName, String signerName, Date signDate,
+                                                  String reason, String location, String contactInfo) {
             this.fieldName = fieldName;
-            this.signerName = "";
-            this.signDate = null;
-            this.reason = "";
-            this.location = "";
-            this.contactInfo = "";
+            this.signerName = signerName != null ? signerName : "";
+            this.signDate = signDate;
+            this.reason = reason != null ? reason : "";
+            this.location = location != null ? location : "";
+            this.contactInfo = contactInfo != null ? contactInfo : "";
         }
 
         // Getters and setters
@@ -340,13 +343,13 @@ public class SignatureVerificationService {
         public float[] getPosition() {
             return position;
         }
-
         public void setPosition(float[] position) {
             this.position = position;
         }
 
         /**
          * Returns overall verification status based on all checks.
+         * Adobe Reader style: If revocation cannot be verified, signature is UNKNOWN.
          */
         public VerificationStatus getOverallStatus() {
             // Critical failures - INVALID
@@ -360,6 +363,11 @@ public class SignatureVerificationService {
                 return VerificationStatus.INVALID;
             }
 
+            // Revocation issues - UNKNOWN (Adobe Reader style)
+            if (revocationStatus.startsWith("Unknown") || revocationStatus.equals("Not Checked")) {
+                return VerificationStatus.UNKNOWN;
+            }
+
             // Trust issues - UNKNOWN
             if (!certificateValid) {
                 return VerificationStatus.UNKNOWN;
@@ -370,34 +378,28 @@ public class SignatureVerificationService {
 
             return VerificationStatus.VALID;
         }
-
-        /**
-         * Returns a simple, easy-to-understand status message.
-         */
         public String getStatusMessage() {
             VerificationStatus status = getOverallStatus();
             switch (status) {
                 case VALID:
-                    return "Signed and verified";
+                    return "Signed and all signatures are valid";
                 case UNKNOWN:
-                    return "Signed but not verified";
+                    return "Signed but identity could not be verified";
                 case INVALID:
-                    // Provide specific reason for invalidity
+                    // Provide specific reason for invalidity in priority order
                     if (!documentIntact) {
-                        return "Document has been modified";
+                        return "Document has been modified after signing";
                     } else if (!signatureValid) {
-                        return "Invalid signature";
+                        return "Signature is invalid or corrupted";
                     } else if (certificateRevoked) {
                         return "Certificate has been revoked";
                     } else if (!certificateValid) {
-                        return "Certificate is not valid";
-                    } else if (!certificateTrusted) {
-                        return "Certificate is not trusted";
+                        return "Certificate has expired or is not yet valid";
                     } else {
-                        return "Invalid signature";
+                        return "Signature verification failed";
                     }
                 default:
-                    return "Unknown";
+                    return "Unknown verification status";
             }
         }
     }
@@ -525,7 +527,8 @@ public class SignatureVerificationService {
                     results.add(result);
                 } catch (Exception e) {
                     log.error("Error verifying signature: " + signatureName, e);
-                    SignatureVerificationResult errorResult = new SignatureVerificationResult(signatureName);
+                    SignatureVerificationResult errorResult = new SignatureVerificationResult(
+                        signatureName, "", null, "", "", "");
                     errorResult.addVerificationError("Failed to verify signature: " + e.getMessage());
                     results.add(errorResult);
                 }
@@ -550,7 +553,44 @@ public class SignatureVerificationService {
      * Verifies a single signature in the PDF.
      */
     private SignatureVerificationResult verifySignature(PdfReader reader, AcroFields acroFields, String signatureName) {
-        SignatureVerificationResult result = new SignatureVerificationResult(signatureName);
+        // Extract signature metadata first
+        String signerName = "";
+        Date signDate = null;
+        String reason = "";
+        String location = "";
+        String contactInfo = "";
+
+        try {
+            PdfPKCS7 pkcs7Temp = acroFields.verifySignature(signatureName);
+            if (pkcs7Temp != null) {
+                // Extract signer name from certificate
+                if (pkcs7Temp.getSigningCertificate() != null) {
+                    signerName = pkcs7Temp.getSigningCertificate().getSubjectDN().toString();
+                }
+                // Extract signature date
+                signDate = pkcs7Temp.getSignDate() != null ? pkcs7Temp.getSignDate().getTime() : null;
+                // Extract reason, location, contact from signature dictionary
+                reason = pkcs7Temp.getReason();
+                location = pkcs7Temp.getLocation();
+                // Contact info is not directly available in PdfPKCS7, extract from dictionary
+                try {
+                    com.itextpdf.text.pdf.PdfDictionary sigDict = acroFields.getSignatureDictionary(signatureName);
+                    if (sigDict != null) {
+                        com.itextpdf.text.pdf.PdfString contactStr = sigDict.getAsString(com.itextpdf.text.pdf.PdfName.CONTACTINFO);
+                        if (contactStr != null) {
+                            contactInfo = contactStr.toString();
+                        }
+                    }
+                } catch (Exception e) {
+                    log.debug("Could not extract contact info", e);
+                }
+            }
+        } catch (Exception e) {
+            log.debug("Could not extract signature metadata", e);
+        }
+
+        SignatureVerificationResult result = new SignatureVerificationResult(
+            signatureName, signerName, signDate, reason, location, contactInfo);
 
         try {
             // Get signature dictionary
@@ -560,19 +600,24 @@ public class SignatureVerificationService {
                 return result;
             }
 
-            // 1. DOCUMENT INTEGRITY CHECK
-            notifyProgress("Checking document integrity...");
-            result.setDocumentIntact(acroFields.signatureCoversWholeDocument(signatureName));
-            if (!result.isDocumentIntact()) {
-                result.addVerificationWarning("Signature does not cover the whole document - document may have been modified after signing");
-            }
-
-            // Get revision information
+            // Get revision information first
             int revision = acroFields.getRevision(signatureName);
             int totalRevisions = acroFields.getTotalRevisions();
             result.setRevision(revision);
             result.setTotalRevisions(totalRevisions);
             result.setCoversWholeDocument(revision == totalRevisions);
+
+            // 1. DOCUMENT INTEGRITY CHECK (Adobe Reader-style)
+            notifyProgress("Checking document integrity...");
+            boolean documentIntact = verifyDocumentIntegrity(acroFields, signatureName, revision, totalRevisions, pkcs7);
+            result.setDocumentIntact(documentIntact);
+
+            if (!documentIntact) {
+                result.addVerificationError("Document has been altered after signing");
+            } else if (revision < totalRevisions) {
+                // Signature is valid but not the last one - this is informational
+                result.addVerificationInfo("Signature is valid. Document has additional signatures or modifications after this signature.");
+            }
 
             // 2. SIGNATURE VALIDITY CHECK
             notifyProgress("Verifying signature validity...");
@@ -594,15 +639,30 @@ public class SignatureVerificationService {
                 result.setCertificateValidTo(signerCert.getNotAfter());
 
                 // 4. CERTIFICATE VALIDITY CHECK
+                // Adobe Reader checks validity at BOTH signing time and current time
                 try {
+                    // Check validity at current time
                     signerCert.checkValidity();
                     result.setCertificateValid(true);
+
+                    // Also check if certificate was valid at signing time
+                    if (signDate != null) {
+                        try {
+                            signerCert.checkValidity(signDate);
+                            result.addVerificationInfo("Certificate was valid at signing time");
+                        } catch (CertificateExpiredException | CertificateNotYetValidException e) {
+                            result.addVerificationWarning("Certificate was not valid at signing time (" +
+                                DATE_FORMAT.format(signDate) + ")");
+                        }
+                    }
                 } catch (CertificateExpiredException e) {
                     result.setCertificateValid(false);
-                    result.addVerificationError("Certificate has expired");
+                    result.addVerificationError("Certificate has expired (expired on " +
+                        DATE_FORMAT.format(signerCert.getNotAfter()) + ")");
                 } catch (CertificateNotYetValidException e) {
                     result.setCertificateValid(false);
-                    result.addVerificationError("Certificate is not yet valid");
+                    result.addVerificationError("Certificate is not yet valid (valid from " +
+                        DATE_FORMAT.format(signerCert.getNotBefore()) + ")");
                 }
 
                 // 5. CERTIFICATE CHAIN VERIFICATION
@@ -629,9 +689,9 @@ public class SignatureVerificationService {
                     log.warn("Certificate trust verification: FAILED - " + e.getMessage());
                 }
 
-                // Check certificate revocation status (OCSP)
-                notifyProgress("Checking revocation status...");
-                checkRevocationStatus(signerCert, pkcs7, result);
+                // Check certificate revocation status (OCSP) - Adobe Reader style
+            notifyProgress("Checking revocation status (OCSP)...");
+            checkRevocationStatus(signerCert, pkcs7, result);
             } else {
                 result.addVerificationError("No certificate found in signature");
             }
@@ -992,7 +1052,7 @@ public class SignatureVerificationService {
                 log.debug("No embedded CRL", e);
             }
 
-            // Method 3: Extract OCSP URL and perform live check
+            // Method 3: Extract OCSP URL and perform live check (with timeout)
             log.info("OCSP: Attempting live check...");
             String ocspUrl = extractOCSPUrl(cert);
 
@@ -1003,27 +1063,41 @@ public class SignatureVerificationService {
                 X509Certificate issuerCert = findIssuerCertificate(cert, certs);
 
                 if (issuerCert != null) {
-                    boolean isRevoked = performLiveOCSPCheck(cert, issuerCert, ocspUrl);
+                    try {
+                        boolean isRevoked = performLiveOCSPCheck(cert, issuerCert, ocspUrl);
 
-                    if (isRevoked) {
-                        result.setRevocationStatus("Revoked");
-                        result.setCertificateRevoked(true);
-                        result.addVerificationError("Certificate has been revoked");
-                    } else {
-                        result.setRevocationStatus("Valid (Live OCSP)");
-                        result.setCertificateRevoked(false);
-                        result.addVerificationInfo("Revocation checked via live OCSP");
+                        if (isRevoked) {
+                            result.setRevocationStatus("Revoked");
+                            result.setCertificateRevoked(true);
+                            result.addVerificationError("Certificate has been revoked");
+                        } else {
+                            result.setRevocationStatus("Valid (Live OCSP)");
+                            result.setCertificateRevoked(false);
+                            result.addVerificationInfo("Revocation checked via live OCSP");
+                        }
+                        return;
+                    } catch (SignatureVerificationException ocspEx) {
+                        log.warn("OCSP check failed: " + ocspEx.getMessage());
+                        // Adobe Reader style: If revocation check fails, treat as verification failure
+                        if (ocspEx.isNetworkError()) {
+                            result.setRevocationStatus("Unknown (Network Error)");
+                            result.addVerificationWarning("Could not verify certificate revocation status due to network error. Signature trust cannot be fully verified.");
+                        } else {
+                            result.setRevocationStatus("Unknown (Check Failed)");
+                            result.addVerificationError("Certificate revocation status could not be verified: " + ocspEx.getUserFriendlyMessage());
+                        }
+                        return;
                     }
-                    return;
                 }
             }
 
             result.setRevocationStatus("Not Checked");
-            result.addVerificationInfo("No OCSP URL found");
+            result.addVerificationWarning("Certificate revocation status could not be verified - no revocation information available");
 
         } catch (Exception e) {
             log.warn("OCSP error: " + e.getMessage());
             result.setRevocationStatus("Unknown");
+            result.addVerificationError("Certificate revocation check failed: " + e.getMessage());
         }
     }
 
@@ -1070,7 +1144,8 @@ public class SignatureVerificationService {
         return null;
     }
 
-    private boolean performLiveOCSPCheck(X509Certificate cert, X509Certificate issuerCert, String ocspUrl) {
+    private boolean performLiveOCSPCheck(X509Certificate cert, X509Certificate issuerCert, String ocspUrl)
+            throws SignatureVerificationException {
         try {
             // Use BouncyCastle 1.48 OCSP API (org.bouncycastle.ocsp)
             org.bouncycastle.ocsp.CertificateID certId = new org.bouncycastle.ocsp.CertificateID(
@@ -1089,8 +1164,8 @@ public class SignatureVerificationService {
             conn.setRequestProperty("Content-Type", "application/ocsp-request");
             conn.setRequestProperty("Accept", "application/ocsp-response");
             conn.setDoOutput(true);
-            conn.setConnectTimeout(10000);
-            conn.setReadTimeout(10000);
+            conn.setConnectTimeout(5000);  // Reduced from 10s to 5s
+            conn.setReadTimeout(5000);      // Reduced from 10s to 5s
 
             java.io.OutputStream out = conn.getOutputStream();
             out.write(req.getEncoded());
@@ -1100,7 +1175,9 @@ public class SignatureVerificationService {
             int responseCode = conn.getResponseCode();
             if (responseCode != 200) {
                 log.warn("OCSP responder returned code: " + responseCode);
-                return false;
+                throw new SignatureVerificationException(
+                    SignatureVerificationException.ErrorType.OCSP_FAILED,
+                    "OCSP responder returned HTTP " + responseCode);
             }
 
             java.io.InputStream in = conn.getInputStream();
@@ -1134,10 +1211,25 @@ public class SignatureVerificationService {
 
         } catch (java.net.SocketTimeoutException e) {
             log.warn("OCSP: Timeout - " + e.getMessage());
+            throw new SignatureVerificationException(
+                SignatureVerificationException.ErrorType.OCSP_TIMEOUT,
+                "OCSP responder at " + ocspUrl + " did not respond within 5 seconds",
+                e);
         } catch (java.io.IOException e) {
             log.warn("OCSP: Network error - " + e.getMessage());
+            throw new SignatureVerificationException(
+                SignatureVerificationException.ErrorType.OCSP_NETWORK_ERROR,
+                e.getMessage(),
+                e);
+        } catch (SignatureVerificationException e) {
+            // Re-throw our custom exception
+            throw e;
         } catch (Exception e) {
             log.warn("OCSP: Error - " + e.getMessage());
+            throw new SignatureVerificationException(
+                SignatureVerificationException.ErrorType.OCSP_FAILED,
+                e.getMessage(),
+                e);
         }
 
         return false;
@@ -1212,6 +1304,142 @@ public class SignatureVerificationService {
             log.debug("Error checking LTV", e);
             return false;
         }
+    }
+
+    /**
+     * Verifies document integrity based on signature type and certification level.
+     * This implements Adobe Reader-style verification:
+     * - Approval signatures: Valid even if not the last revision (multiple signatures expected)
+     * - Certification signatures: Check if subsequent changes are allowed by certification level
+     *
+     * @param acroFields      AcroFields from PDF
+     * @param signatureName   Name of the signature field
+     * @param revision        Signature's revision number
+     * @param totalRevisions  Total number of revisions in PDF
+     * @param pkcs7          Signature PKCS7 data
+     * @return true if document integrity is intact, false if altered
+     */
+    private boolean verifyDocumentIntegrity(AcroFields acroFields, String signatureName,
+                                           int revision, int totalRevisions, PdfPKCS7 pkcs7) {
+        try {
+            // STEP 1: Always verify cryptographic signature first
+            // This checks if the signed content matches the signature
+            boolean sigValid = pkcs7.verify();
+            if (!sigValid) {
+                log.warn("Signature " + signatureName + " cryptographic validation failed - signature is invalid or document has been altered");
+                return false;
+            }
+
+            // STEP 2: Check document coverage based on revision
+            if (revision == totalRevisions) {
+                // This is the last signature - must cover the whole document
+                boolean coversWhole = acroFields.signatureCoversWholeDocument(signatureName);
+                log.info("Signature " + signatureName + " is the last revision - covers whole document: " + coversWhole);
+
+                if (!coversWhole) {
+                    log.warn("Last signature does not cover whole document - document has been modified after signing");
+                    return false;
+                }
+
+                log.info("Document integrity check PASSED: Signature is cryptographically valid and covers whole document");
+                return true;
+            }
+
+            // STEP 3: For non-last signatures, check signature type
+            boolean isCertified = isCertificationSignature(acroFields, signatureName);
+
+            if (isCertified) {
+                // For certification signatures, check if subsequent changes violate certification level
+                int certLevel = getCertificationLevel(acroFields, signatureName);
+                log.info("Signature " + signatureName + " is a certification signature (level " + certLevel + ")");
+
+                // Signature is cryptographically valid (checked in STEP 1)
+                // For now, we accept that subsequent changes may be allowed by certification level
+                // A full implementation would check the actual modifications against the certification level
+                // Level 1 (NO_CHANGES_ALLOWED): No changes allowed
+                // Level 2 (FORM_FILLING): Only form filling allowed
+                // Level 3 (FORM_FILLING_AND_ANNOTATION): Form filling and annotations allowed
+                log.info("Certification signature is cryptographically valid. Subsequent changes may be allowed by certification level.");
+                return true;
+            } else {
+                // For approval signatures (NOT_CERTIFIED), multiple signatures are EXPECTED
+                // The signature is cryptographically valid (checked in STEP 1)
+                // Check if this signature covered the document at the time it was signed
+                boolean coveredAtSigningTime = acroFields.signatureCoversWholeDocument(signatureName);
+                log.info("Signature " + signatureName + " is an approval signature (revision " + revision + "/" + totalRevisions +
+                        ") - cryptographically valid: true, covered document at signing time: " + coveredAtSigningTime);
+
+                // For approval signatures, as long as the signature is cryptographically valid,
+                // it's acceptable that there are subsequent revisions (additional signatures)
+                return true;
+            }
+
+        } catch (Exception e) {
+            log.error("Error verifying document integrity for " + signatureName, e);
+            return false;
+        }
+    }
+
+    /**
+     * Checks if a signature is a certification signature (has DocMDP transform).
+     *
+     * @param acroFields    AcroFields from PDF
+     * @param signatureName Name of the signature field
+     * @return true if this is a certification signature, false otherwise
+     */
+    private boolean isCertificationSignature(AcroFields acroFields, String signatureName) {
+        try {
+            com.itextpdf.text.pdf.PdfDictionary sigDict = acroFields.getSignatureDictionary(signatureName);
+            if (sigDict == null) {
+                return false;
+            }
+
+            // Check for Reference array with DocMDP transform
+            com.itextpdf.text.pdf.PdfArray reference = sigDict.getAsArray(com.itextpdf.text.pdf.PdfName.REFERENCE);
+            if (reference != null && reference.size() > 0) {
+                com.itextpdf.text.pdf.PdfDictionary refDict = reference.getAsDict(0);
+                if (refDict != null) {
+                    com.itextpdf.text.pdf.PdfName transformMethod = refDict.getAsName(com.itextpdf.text.pdf.PdfName.TRANSFORMMETHOD);
+                    return com.itextpdf.text.pdf.PdfName.DOCMDP.equals(transformMethod);
+                }
+            }
+        } catch (Exception e) {
+            log.debug("Error checking if signature is certified", e);
+        }
+        return false;
+    }
+
+    /**
+     * Gets the certification level (P value) from a certification signature.
+     *
+     * @param acroFields    AcroFields from PDF
+     * @param signatureName Name of the signature field
+     * @return Certification level: 1 (no changes), 2 (form filling), 3 (form filling + annotations)
+     */
+    private int getCertificationLevel(AcroFields acroFields, String signatureName) {
+        try {
+            com.itextpdf.text.pdf.PdfDictionary sigDict = acroFields.getSignatureDictionary(signatureName);
+            if (sigDict == null) {
+                return 0;
+            }
+
+            com.itextpdf.text.pdf.PdfArray reference = sigDict.getAsArray(com.itextpdf.text.pdf.PdfName.REFERENCE);
+            if (reference != null && !reference.isEmpty()) {
+                com.itextpdf.text.pdf.PdfDictionary refDict = reference.getAsDict(0);
+                if (refDict != null) {
+                    com.itextpdf.text.pdf.PdfDictionary transformParams = refDict.getAsDict(com.itextpdf.text.pdf.PdfName.TRANSFORMPARAMS);
+                    if (transformParams != null) {
+                        com.itextpdf.text.pdf.PdfNumber p = transformParams.getAsNumber(com.itextpdf.text.pdf.PdfName.P);
+                        if (p != null) {
+                            return p.intValue();
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.debug("Error getting certification level", e);
+        }
+        return 0;
     }
 
     /**

@@ -450,8 +450,8 @@ public class TrustStoreManager {
     }
 
     /**
-     * Gets all trust anchors from configured sources (embedded + manual only).
-     * OS trust stores are NOT used for signature verification.
+     * Gets all trust anchors from configured sources (embedded + manual + OS trust store).
+     * Now includes OS trust stores for Adobe Reader compatibility.
      */
     public Set<TrustAnchor> getAllTrustAnchors() {
         if (!initialized) {
@@ -470,8 +470,14 @@ public class TrustStoreManager {
             trustAnchors.add(new TrustAnchor(cert, null));
         }
 
-        // NOTE: OS trust stores (Windows, macOS, Linux) are intentionally excluded
-        // Only embedded and manual certificates are used for signature verification
+        // Add OS trust store certificates for Adobe Reader compatibility
+        try {
+            Set<TrustAnchor> osTrustAnchors = getOSTrustAnchors();
+            trustAnchors.addAll(osTrustAnchors);
+            log.info("Added " + osTrustAnchors.size() + " OS trust store certificate(s)");
+        } catch (Exception e) {
+            log.warn("Could not load OS trust store certificates: " + e.getMessage());
+        }
 
         log.debug("Total trust anchors: " + trustAnchors.size() +
                 " (Embedded: " + embeddedCertificates.size() +
@@ -482,29 +488,58 @@ public class TrustStoreManager {
 
     /**
      * Gets Windows trust store anchors (Windows only).
-     * NOTE: This method is NOT USED for signature verification.
-     * Kept for reference only.
+     * Now used for signature verification to match Adobe Reader behavior.
      */
-    @Deprecated
-    private Set<TrustAnchor> getWindowsTrustAnchors() throws Exception {
+    private Set<TrustAnchor> getOSTrustAnchors() throws Exception {
         Set<TrustAnchor> anchors = new HashSet<>();
 
-        try {
-            // Try to get default trust managers
-            TrustManagerFactory tmf = TrustManagerFactory.getInstance(
-                    TrustManagerFactory.getDefaultAlgorithm());
-            tmf.init((KeyStore) null); // Use default keystore
+        if (!isWindows()) {
+            log.debug("OS trust store not supported on non-Windows systems");
+            return anchors;
+        }
 
-            for (javax.net.ssl.TrustManager tm : tmf.getTrustManagers()) {
-                if (tm instanceof javax.net.ssl.X509TrustManager) {
-                    javax.net.ssl.X509TrustManager x509Tm = (javax.net.ssl.X509TrustManager) tm;
-                    for (X509Certificate cert : x509Tm.getAcceptedIssuers()) {
-                        anchors.add(new TrustAnchor(cert, null));
-                    }
+        try {
+            // Use Windows-MY keystore for personal certificates
+            KeyStore windowsMY = KeyStore.getInstance("Windows-MY");
+            windowsMY.load(null, null);
+
+            // Use Windows-ROOT keystore for root certificates
+            KeyStore windowsROOT = KeyStore.getInstance("Windows-ROOT");
+            windowsROOT.load(null, null);
+
+            // Collect certificates from both keystores
+            Set<X509Certificate> osCertificates = new HashSet<>();
+
+            // Add certificates from Windows-MY (personal certificates)
+            Enumeration<String> myAliases = windowsMY.aliases();
+            while (myAliases.hasMoreElements()) {
+                String alias = myAliases.nextElement();
+                Certificate cert = windowsMY.getCertificate(alias);
+                if (cert instanceof X509Certificate) {
+                    osCertificates.add((X509Certificate) cert);
                 }
             }
+
+            // Add certificates from Windows-ROOT (root certificates)
+            Enumeration<String> rootAliases = windowsROOT.aliases();
+            while (rootAliases.hasMoreElements()) {
+                String alias = rootAliases.nextElement();
+                Certificate cert = windowsROOT.getCertificate(alias);
+                if (cert instanceof X509Certificate) {
+                    osCertificates.add((X509Certificate) cert);
+                }
+            }
+
+            // Convert to TrustAnchors
+            for (X509Certificate cert : osCertificates) {
+                anchors.add(new TrustAnchor(cert, null));
+            }
+
+            log.info("Loaded " + anchors.size() + " certificate(s) from Windows trust store");
+
         } catch (Exception e) {
-            log.debug("Could not access system trust store", e);
+            log.warn("Could not access Windows trust store: " + e.getMessage());
+            throw e;
         }
 
         return anchors;

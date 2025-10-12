@@ -48,10 +48,6 @@ public class SignatureVerificationDialog extends JDialog {
         JPanel contentPanel = createContentPanel();
         mainPanel.add(contentPanel, BorderLayout.CENTER);
 
-        // Button panel
-        JPanel buttonPanel = createButtonPanel();
-        mainPanel.add(buttonPanel, BorderLayout.SOUTH);
-
         add(mainPanel);
     }
 
@@ -152,33 +148,6 @@ public class SignatureVerificationDialog extends JDialog {
 
         panel.add(row);
         panel.add(Box.createRigidArea(new Dimension(0, 8)));
-    }
-
-    private JPanel createButtonPanel() {
-        JPanel panel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
-        panel.setBackground(UIConstants.Colors.BG_PRIMARY);
-
-        // Cancel button
-        JButton cancelBtn = new JButton("Cancel");
-        cancelBtn.setFont(UIConstants.Fonts.NORMAL_PLAIN);
-        cancelBtn.setPreferredSize(UIConstants.buttonSize(100));
-        cancelBtn.setFocusPainted(false);
-        cancelBtn.addActionListener(e -> dispose());
-
-        // Show signature properties button
-        JButton propertiesBtn = new JButton("Show Signature Properties");
-        propertiesBtn.setFont(UIConstants.Fonts.NORMAL_BOLD);
-        propertiesBtn.setPreferredSize(UIConstants.buttonSize(200));
-        propertiesBtn.setFocusPainted(false);
-        propertiesBtn.addActionListener(e -> {
-            dispose();
-            showDetailedProperties();
-        });
-
-        panel.add(cancelBtn);
-        panel.add(propertiesBtn);
-
-        return panel;
     }
 
     private void showDetailedProperties() {

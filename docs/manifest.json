@@ -1,0 +1,164 @@
+{
+  "name": "eMark - Free PDF Signing & Verification Tool",
+  "short_name": "eMark",
+  "description": "Free and open-source PDF signing and verification software. A powerful Adobe Reader alternative with support for USB tokens, HSM, PFX certificates, and Windows certificate store. Sign, verify, timestamp, and protect PDFs securely.",
+  "version": "1.1.0",
+  "start_url": "/eMark/",
+  "scope": "/eMark/",
+  "display": "standalone",
+  "orientation": "any",
+  "theme_color": "#667eea",
+  "background_color": "#0a0a0a",
+  "lang": "en-US",
+  "dir": "ltr",
+  "categories": [
+    "productivity",
+    "utilities",
+    "business",
+    "security"
+  ],
+  "icons": [
+    {
+      "src": "images/logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "images/logo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "images/logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "images/favicon.ico",
+      "sizes": "48x48 32x32 16x16",
+      "type": "image/x-icon"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "images/main.png",
+      "sizes": "1920x1080",
+      "type": "image/png",
+      "label": "eMark Main Interface - Clean and intuitive PDF signing interface"
+    },
+    {
+      "src": "images/pdf-view.png",
+      "sizes": "1920x1080",
+      "type": "image/png",
+      "label": "PDF Viewer - Adobe Reader-like viewing experience"
+    },
+    {
+      "src": "images/signature-appearance.png",
+      "sizes": "1920x1080",
+      "type": "image/png",
+      "label": "Signature Appearance - Customize your digital signature"
+    },
+    {
+      "src": "images/certificate-selection.png",
+      "sizes": "1920x1080",
+      "type": "image/png",
+      "label": "Certificate Selection - Multiple certificate sources support"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Download eMark",
+      "short_name": "Download",
+      "description": "Download eMark for your platform",
+      "url": "/eMark/#download",
+      "icons": [
+        {
+          "src": "images/logo.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "View Features",
+      "short_name": "Features",
+      "description": "Explore eMark features",
+      "url": "/eMark/#features",
+      "icons": [
+        {
+          "src": "images/logo.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Gallery",
+      "short_name": "Gallery",
+      "description": "View screenshots and demos",
+      "url": "/eMark/#gallery",
+      "icons": [
+        {
+          "src": "images/logo.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "GitHub Repository",
+      "short_name": "GitHub",
+      "description": "View source code on GitHub",
+      "url": "https://github.com/devcodemuni/eMark",
+      "icons": [
+        {
+          "src": "images/logo.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    }
+  ],
+  "related_applications": [
+    {
+      "platform": "windows",
+      "url": "https://github.com/devcodemuni/eMark/releases/latest"
+    },
+    {
+      "platform": "linux",
+      "url": "https://github.com/devcodemuni/eMark/releases/latest"
+    }
+  ],
+  "prefer_related_applications": false,
+  "iarc_rating_id": "e84b072d-71b3-4d3e-86ae-31a8ce4e53b7",
+  "features": [
+    "PDF Digital Signing",
+    "PDF Signature Verification",
+    "Adobe Reader-like Interface",
+    "USB Token Support",
+    "HSM Support (PKCS#11)",
+    "PKCS#12/PFX Support",
+    "Windows Certificate Store",
+    "Cross-Platform",
+    "Timestamp Support",
+    "Long-Term Validation (LTV)",
+    "Drag-and-Drop Signature Placement",
+    "Signature Appearance Customization"
+  ],
+  "author": {
+    "name": "Codemuni",
+    "url": "https://github.com/devcodemuni"
+  },
+  "license": "AGPL-3.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/devcodemuni/eMark"
+  },
+  "bugs": {
+    "url": "https://github.com/devcodemuni/eMark/issues"
+  },
+  "homepage": "https://devcodemuni.github.io/eMark/"
+}

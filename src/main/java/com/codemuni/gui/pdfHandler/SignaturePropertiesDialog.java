@@ -23,7 +23,6 @@ public class SignaturePropertiesDialog extends JDialog {
     private static final Color UNKNOWN_COLOR = UIConstants.Colors.STATUS_WARNING;
     private static final Color INVALID_COLOR = UIConstants.Colors.STATUS_ERROR;
     private static final Color BG_COLOR = UIConstants.Colors.BG_PRIMARY;
-    private static final Color PANEL_BG = UIConstants.Colors.BG_TERTIARY;
     private static final Color SECTION_BG = UIConstants.Colors.BG_SECONDARY;
 
     private static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("MMM dd, yyyy HH:mm:ss");
@@ -63,6 +62,9 @@ public class SignaturePropertiesDialog extends JDialog {
         scrollPane.setBorder(null);
         scrollPane.getViewport().setBackground(BG_COLOR);
 
+        // To improve scroll density
+        scrollPane.getVerticalScrollBar().setUnitIncrement(16);
+
         // Ensure scroll starts at top
         scrollPane.getVerticalScrollBar().setValue(0);
         SwingUtilities.invokeLater(() -> scrollPane.getViewport().setViewPosition(new java.awt.Point(0, 0)));
@@ -91,20 +93,21 @@ public class SignaturePropertiesDialog extends JDialog {
         leftSection.add(colorBar);
 
         // Shield icon (if signature is valid/trusted)
-        if (result.isSignatureValid() && result.isCertificateTrusted()) {
-            ImageIcon shieldIcon = IconLoader.loadIcon("shield.png", 48, 48);
-            if (shieldIcon != null) {
-                JLabel iconLabel = new JLabel(shieldIcon);
-                iconLabel.setBorder(new EmptyBorder(10, 12, 10, 12));
-                leftSection.add(iconLabel);
-            } else {
-                // Icon not found, add spacing instead
-                leftSection.add(Box.createRigidArea(new Dimension(12, 70)));
-            }
+        boolean isOverallValid = result.getOverallStatus() == VerificationStatus.VALID;
+
+        // Select appropriate icon
+        String iconPath = isOverallValid ? "shield.png" : "shield-invalid.png";
+        ImageIcon shieldIcon = IconLoader.loadIcon(iconPath, 48, 48);
+
+        if (shieldIcon != null) {
+            JLabel iconLabel = new JLabel(shieldIcon);
+            iconLabel.setBorder(new EmptyBorder(10, 12, 10, 12));
+            leftSection.add(iconLabel);
         } else {
-            // No shield for invalid/untrusted, just add spacing
+            // Fallback: if icon missing, maintain layout spacing
             leftSection.add(Box.createRigidArea(new Dimension(12, 70)));
         }
+
 
         panel.add(leftSection, BorderLayout.WEST);
 
@@ -114,7 +117,7 @@ public class SignaturePropertiesDialog extends JDialog {
         statusPanel.setBackground(BG_COLOR);
 
         String signerName = X509SubjectUtils.extractCommonNameFromDN(result.getCertificateSubject());
-        if (signerName == null || signerName.isEmpty()) {
+        if (signerName.isEmpty()) {
             signerName = result.getFieldName();
         }
 
@@ -149,22 +152,6 @@ public class SignaturePropertiesDialog extends JDialog {
         panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
         panel.setBackground(BG_COLOR);
 
-        // Verification Status Section
-        panel.add(createSection("Verification Status", createVerificationStatusContent()));
-        panel.add(Box.createRigidArea(new Dimension(0, 12)));
-
-        // Signature Information Section
-        panel.add(createSection("Signature Information", createSignatureInfoContent()));
-        panel.add(Box.createRigidArea(new Dimension(0, 12)));
-
-        // Certificate Information Section
-        panel.add(createSection("Certificate Information", createCertificateInfoContent()));
-        panel.add(Box.createRigidArea(new Dimension(0, 12)));
-
-        // Document Information Section
-        panel.add(createSection("Document Information", createDocumentInfoContent()));
-        panel.add(Box.createRigidArea(new Dimension(0, 12)));
-
         // Info Section (if any)
         if (!result.getVerificationInfo().isEmpty()) {
             panel.add(createSection("Information", createInfoContent()));
@@ -182,6 +169,22 @@ public class SignaturePropertiesDialog extends JDialog {
             panel.add(createSection("Errors", createErrorsContent()));
             panel.add(Box.createRigidArea(new Dimension(0, 12)));
         }
+
+        // Verification Status Section
+        panel.add(createSection("Verification Status", createVerificationStatusContent()));
+        panel.add(Box.createRigidArea(new Dimension(0, 12)));
+
+        // Signature Information Section
+        panel.add(createSection("Signature Information", createSignatureInfoContent()));
+        panel.add(Box.createRigidArea(new Dimension(0, 12)));
+
+        // Certificate Information Section
+        panel.add(createSection("Certificate Information", createCertificateInfoContent()));
+        panel.add(Box.createRigidArea(new Dimension(0, 12)));
+
+        // Document Information Section
+        panel.add(createSection("Document Information", createDocumentInfoContent()));
+        panel.add(Box.createRigidArea(new Dimension(0, 12)));
 
         return panel;
     }
@@ -212,7 +215,7 @@ public class SignaturePropertiesDialog extends JDialog {
         panel.setBackground(SECTION_BG);
 
         addStatusRow(panel, "Signature", result.isSignatureValid());
-        addStatusRow(panel, "Document", result.isDocumentIntact());
+        addStatusRow(panel, "Document Integrity", result.isDocumentIntact());
         addStatusRow(panel, "Certificate Valid", result.isCertificateValid());
         addStatusRow(panel, "Certificate Trusted", result.isCertificateTrusted());
         addStatusRow(panel, "Revocation Status", !result.isCertificateRevoked(), result.getRevocationStatus());

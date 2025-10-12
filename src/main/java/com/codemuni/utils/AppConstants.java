@@ -11,6 +11,7 @@ public class AppConstants {
 
     public static final String APP_AUTHOR = "CodeMuni";
     public static final String APP_WEBSITE = "https://devcodemuni.github.io/eMark/";
+    public static final String APP_GITHUB = "https://github.com/devcodemuni/eMark";
     public static final String APP_LICENSE_URL = "https://github.com/devcodemuni/eMark/blob/main/LICENSE";
     public static final String LOGO_PATH = "/icons/logo.png";
 

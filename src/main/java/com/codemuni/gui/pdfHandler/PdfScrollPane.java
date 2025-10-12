@@ -57,5 +57,35 @@ public class PdfScrollPane extends JScrollPane {
             }
         }
     }
+
+    /**
+     * Scrolls the viewport to show the specified page number (1-based).
+     * @param pageNumber The page number to scroll to (1-based)
+     */
+    public void scrollToPage(int pageNumber) {
+        int pageIndex = pageNumber - 1; // Convert to 0-based index
+
+        // Wait for the component to be laid out
+        SwingUtilities.invokeLater(() -> {
+            if (pageIndex >= 0 && pageIndex < pdfPanel.getComponentCount()) {
+                Component page = pdfPanel.getComponent(pageIndex);
+                Rectangle pageBounds = page.getBounds();
+
+                // Get the viewport and its current view rectangle
+                JViewport viewport = getViewport();
+                Rectangle viewRect = viewport.getViewRect();
+
+                // Calculate the target position to center the page
+                int targetY = pageBounds.y - (viewRect.height - pageBounds.height) / 3; // 1/3 from top
+                targetY = Math.max(0, targetY); // Don't scroll above the top
+
+                // Scroll to the target position
+                viewport.setViewPosition(new Point(0, targetY));
+
+                // Update the page info
+                updateCurrentPageBasedOnScroll();
+            }
+        });
+    }
 }
 

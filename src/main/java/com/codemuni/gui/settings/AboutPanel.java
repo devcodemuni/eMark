@@ -69,7 +69,7 @@ public class AboutPanel extends JPanel {
         linksPanel.setOpaque(false);
         linksPanel.add(createStyledLink("🌐 Website", APP_WEBSITE));
         linksPanel.add(createStyledLink("📄 License", APP_LICENSE_URL));
-        linksPanel.add(createStyledLink("💻 GitHub", APP_WEBSITE)); // fixed GitHub link
+        linksPanel.add(createStyledLink("💻 GitHub", APP_GITHUB)); // fixed GitHub link
         linksPanel.setBorder(new EmptyBorder(8, 0, 15, 0));
 
         // --- Version Check Button ---
