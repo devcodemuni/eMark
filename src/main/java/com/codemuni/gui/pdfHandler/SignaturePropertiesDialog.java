@@ -92,16 +92,26 @@ public class SignaturePropertiesDialog extends JDialog {
         colorBar.setPreferredSize(new Dimension(6, 70));
         leftSection.add(colorBar);
 
-        // Shield icon (if signature is valid/trusted)
+        // Main icon based on signature type and validity
         boolean isOverallValid = result.getOverallStatus() == VerificationStatus.VALID;
+        boolean isCertified = result.isCertificationSignature();
 
         // Select appropriate icon
-        String iconPath = isOverallValid ? "shield.png" : "shield-invalid.png";
-        ImageIcon shieldIcon = IconLoader.loadIcon(iconPath, 48, 48);
+        String iconPath;
+        if (isCertified) {
+            // Use certified.png for certification signatures
+            iconPath = "certified.png";
+        } else {
+            // Use shield icons for regular signatures
+            iconPath = isOverallValid ? "shield.png" : "shield-invalid.png";
+        }
 
-        if (shieldIcon != null) {
-            JLabel iconLabel = new JLabel(shieldIcon);
+        ImageIcon mainIcon = IconLoader.loadIcon(iconPath, 48, 48);
+
+        if (mainIcon != null) {
+            JLabel iconLabel = new JLabel(mainIcon);
             iconLabel.setBorder(new EmptyBorder(10, 12, 10, 12));
+            iconLabel.setToolTipText(isCertified ? "This document is certified" : null);
             leftSection.add(iconLabel);
         } else {
             // Fallback: if icon missing, maintain layout spacing
@@ -141,6 +151,20 @@ public class SignaturePropertiesDialog extends JDialog {
         statusPanel.add(statusLabel);
         statusPanel.add(Box.createRigidArea(new Dimension(0, 4)));
         statusPanel.add(fieldLabel);
+
+        // Add invisible badge if signature is invisible
+        if (result.isInvisible()) {
+            statusPanel.add(Box.createRigidArea(new Dimension(0, 4)));
+            JLabel invisibleBadge = new JLabel("INVISIBLE");
+            invisibleBadge.setFont(new Font("Segoe UI", Font.BOLD, 10));
+            invisibleBadge.setForeground(new Color(255, 255, 255));
+            invisibleBadge.setOpaque(true);
+            invisibleBadge.setBackground(new Color(158, 158, 158));
+            invisibleBadge.setBorder(new EmptyBorder(3, 7, 3, 7));
+            invisibleBadge.setAlignmentX(Component.LEFT_ALIGNMENT);
+            invisibleBadge.setToolTipText("This signature has no visual appearance on the document");
+            statusPanel.add(invisibleBadge);
+        }
 
         panel.add(statusPanel, BorderLayout.CENTER);
 

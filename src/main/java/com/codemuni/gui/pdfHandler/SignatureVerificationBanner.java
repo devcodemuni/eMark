@@ -33,6 +33,7 @@ public class SignatureVerificationBanner extends JPanel {
     private boolean buttonHovered = false;
     private Color currentBgColor = INFO_BG;
     private Runnable toggleAction;
+    private boolean isCertified = false; // Track if document is certified
 
     public enum VerificationStatus {
         ALL_VALID,
@@ -204,6 +205,15 @@ public class SignatureVerificationBanner extends JPanel {
         int certificateRevoked = 0;
         int certificateExpired = 0;
 
+        // Check if document is certified (any certification signature present)
+        isCertified = false;
+        for (SignatureVerificationResult result : results) {
+            if (result.isCertificationSignature()) {
+                isCertified = true;
+                break;
+            }
+        }
+
         // Categorize each signature
         for (SignatureVerificationResult result : results) {
             if (isSignatureValid(result)) {
@@ -215,7 +225,7 @@ public class SignatureVerificationBanner extends JPanel {
                 }
             } else {
                 invalid++; // Invalid (document modified, signature broken, cert revoked, etc.)
-                
+
                 // Track specific failure reason (priority order)
                 if (!result.isDocumentIntact()) {
                     documentModified++;
@@ -289,7 +299,8 @@ public class SignatureVerificationBanner extends JPanel {
 
         switch (status) {
             case ALL_VALID:
-                iconName = "check_circle.png";
+                // Use certified icon if document is certified, otherwise use check_circle
+                iconName = isCertifiedDocument() ? "certified.png" : "check_circle.png";
                 if (total == 1) {
                     message = "Signed and all signatures are valid. Document has not been modified since signing.";
                 } else {
@@ -401,10 +412,17 @@ public class SignatureVerificationBanner extends JPanel {
         if (!result.isSignatureValid()) return false;
         if (!result.isCertificateValid()) return false;
         if (result.isCertificateRevoked()) return false;
-        
+
         // If certificate is not trusted, it's still technically "valid" but with warning
         // PDF viewer shows this as yellow/unknown, not red/invalid
         return true;
+    }
+
+    /**
+     * Returns whether the document is certified.
+     */
+    private boolean isCertifiedDocument() {
+        return isCertified;
     }
 
     /**

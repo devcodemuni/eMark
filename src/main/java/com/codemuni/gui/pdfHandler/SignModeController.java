@@ -200,6 +200,12 @@ public class SignModeController {
             activePageLabel.repaint();
         }
 
+        // Restore unsigned signature field overlays if they exist
+        if (rendererService != null && rendererService.hasUnsignedSignatureFields()) {
+            rendererService.showSignatureFieldOverlaysAutomatic();
+            log.info("Restored unsigned signature field overlays after cancel");
+        }
+
         // Notify UI to update
         if (onSignDone != null) {
             onSignDone.run();

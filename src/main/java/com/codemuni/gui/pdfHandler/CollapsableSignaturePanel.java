@@ -595,6 +595,21 @@ public class CollapsableSignaturePanel extends JPanel {
                 centerPanel.add(certBadge);
             }
 
+            // Add invisible badge if signature is invisible
+            if (result.isInvisible()) {
+                centerPanel.add(Box.createRigidArea(new Dimension(8, 0)));
+
+                JLabel invisibleBadge = new JLabel("INVISIBLE");
+                invisibleBadge.setFont(new Font("Segoe UI", Font.BOLD, 9));
+                invisibleBadge.setForeground(new Color(255, 255, 255));
+                invisibleBadge.setOpaque(true);
+                invisibleBadge.setBackground(new Color(158, 158, 158));
+                invisibleBadge.setBorder(new EmptyBorder(3, 7, 3, 7));
+                invisibleBadge.setAlignmentY(Component.CENTER_ALIGNMENT);
+                invisibleBadge.setToolTipText("This signature has no visual appearance on the document");
+                centerPanel.add(invisibleBadge);
+            }
+
             centerPanel.add(Box.createHorizontalGlue());
             headerPanel.add(centerPanel, BorderLayout.CENTER);
 
@@ -741,7 +756,7 @@ public class CollapsableSignaturePanel extends JPanel {
 
             // Core verification checks (PDF viewer order)
             addCompactStatusRow(detailsPanel, "Signature Verified", result.isSignatureValid(), false);
-            addCompactStatusRow(detailsPanel, "Document Tampered", result.isDocumentIntact(), false);
+            addCompactStatusRow(detailsPanel, "Document Intact", result.isDocumentIntact(), false);
             addCompactStatusRow(detailsPanel, "Certificate Valid", result.isCertificateValid(), false);
             addCompactStatusRow(detailsPanel, "Certificate Trusted", result.isCertificateTrusted(), false);
 

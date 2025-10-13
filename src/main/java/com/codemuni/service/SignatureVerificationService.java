@@ -117,6 +117,9 @@ public class SignatureVerificationService {
         private com.codemuni.model.CertificationLevel certificationLevel = com.codemuni.model.CertificationLevel.NOT_CERTIFIED;
         private boolean isCertificationSignature = false;
 
+        // Visibility information
+        private boolean isInvisible = false;
+
         public SignatureVerificationResult(String fieldName, String signerName, Date signDate,
                                                   String reason, String location, String contactInfo) {
             this.fieldName = fieldName;
@@ -365,6 +368,14 @@ public class SignatureVerificationService {
 
         public void setCertificationSignature(boolean certificationSignature) {
             this.isCertificationSignature = certificationSignature;
+        }
+
+        public boolean isInvisible() {
+            return isInvisible;
+        }
+
+        public void setInvisible(boolean invisible) {
+            this.isInvisible = invisible;
         }
 
         /**
@@ -859,12 +870,27 @@ public class SignatureVerificationService {
                     // Get the first position (signatures typically have one position)
                     AcroFields.FieldPosition fieldPos = positions.get(0);
                     result.setPageNumber(fieldPos.page);
-                    result.setPosition(new float[]{
-                        fieldPos.position.getLeft(),
-                        fieldPos.position.getBottom(),
-                        fieldPos.position.getRight(),
-                        fieldPos.position.getTop()
-                    });
+
+                    float left = fieldPos.position.getLeft();
+                    float bottom = fieldPos.position.getBottom();
+                    float right = fieldPos.position.getRight();
+                    float top = fieldPos.position.getTop();
+
+                    result.setPosition(new float[]{left, bottom, right, top});
+
+                    // Detect invisible signature (width or height is zero or very small)
+                    float width = right - left;
+                    float height = top - bottom;
+                    boolean invisible = (width <= 0.1f || height <= 0.1f);
+                    result.setInvisible(invisible);
+
+                    if (invisible) {
+                        log.info("Signature " + signatureName + " is invisible (width=" + width + ", height=" + height + ")");
+                    }
+                } else {
+                    // No position means invisible signature
+                    result.setInvisible(true);
+                    log.info("Signature " + signatureName + " has no position (invisible)");
                 }
             } catch (Exception e) {
                 log.debug("Could not extract signature position", e);
