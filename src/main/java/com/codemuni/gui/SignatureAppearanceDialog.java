@@ -53,7 +53,7 @@ public class SignatureAppearanceDialog extends JDialog {
     public SignatureAppearanceDialog(Frame parent) {
         super(parent, "Signature Appearance Settings", true);
         setDefaultCloseOperation(DISPOSE_ON_CLOSE);
-        setResizable(false);
+        setResizable(true);
         this.parent = parent;
     }
 
@@ -62,11 +62,12 @@ public class SignatureAppearanceDialog extends JDialog {
     }
 
     public void showAppearanceConfigPrompt() {
-        JPanel mainPanel = new JPanel(new BorderLayout(15, 10));
-        mainPanel.setBorder(BorderFactory.createEmptyBorder(20, 20, 10, 20));
+        // Create main content panel (will be scrollable)
+        JPanel mainContentPanel = new JPanel(new BorderLayout(15, 10));
+        mainContentPanel.setBorder(BorderFactory.createEmptyBorder(20, 20, 10, 20));
 
         JPanel formPanel = createFormPanel();
-        mainPanel.add(formPanel, BorderLayout.CENTER);
+        mainContentPanel.add(formPanel, BorderLayout.CENTER);
 
         previewPanel = new JPanel(new BorderLayout());
         TitledBorder titledBorder = BorderFactory.createTitledBorder("Live Preview");
@@ -76,7 +77,20 @@ public class SignatureAppearanceDialog extends JDialog {
         previewPanel.setBackground(new Color(106, 106, 106));
         previewPanel.setPreferredSize(new Dimension(400, 220)); // Set minimum size for preview
 
+        JPanel southPanel = new JPanel(new BorderLayout());
+        southPanel.add(previewPanel, BorderLayout.CENTER);
+        mainContentPanel.add(southPanel, BorderLayout.SOUTH);
+
+        // Create scroll pane for main content
+        JScrollPane scrollPane = new JScrollPane(mainContentPanel);
+        scrollPane.setBorder(null);
+        scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
+        scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        scrollPane.getVerticalScrollBar().setUnitIncrement(16); // Smooth scrolling
+
+        // Button panel (non-scrollable, always visible at bottom)
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        buttonPanel.setBorder(BorderFactory.createEmptyBorder(5, 10, 10, 10));
         JButton cancelButton = new JButton("Cancel");
         JButton okButton = new JButton("OK");
         getRootPane().setDefaultButton(okButton);
@@ -85,12 +99,12 @@ public class SignatureAppearanceDialog extends JDialog {
         buttonPanel.add(okButton);
         buttonPanel.add(cancelButton);
 
-        JPanel southPanel = new JPanel(new BorderLayout());
-        southPanel.add(previewPanel, BorderLayout.CENTER);
-        southPanel.add(buttonPanel, BorderLayout.SOUTH);
-        mainPanel.add(southPanel, BorderLayout.SOUTH);
+        // Main container with scroll pane and fixed button panel
+        JPanel containerPanel = new JPanel(new BorderLayout());
+        containerPanel.add(scrollPane, BorderLayout.CENTER);
+        containerPanel.add(buttonPanel, BorderLayout.SOUTH);
 
-        add(mainPanel);
+        add(containerPanel);
 
         isInitializing = true;
         setupListeners();
@@ -101,6 +115,20 @@ public class SignatureAppearanceDialog extends JDialog {
         SwingUtilities.invokeLater(this::updatePreview);
 
         pack();
+
+        // Set initial size based on content, with max height constraint
+        Dimension preferredSize = getPreferredSize();
+        int maxHeight = (int) (Toolkit.getDefaultToolkit().getScreenSize().height * 0.85); // 85% of screen height
+
+        if (preferredSize.height > maxHeight) {
+            setSize(preferredSize.width, maxHeight);
+        } else {
+            setSize(preferredSize);
+        }
+
+        // Set minimum size to prevent dialog from being too small
+        setMinimumSize(new Dimension(Math.min(700, preferredSize.width), 400));
+
         setLocationRelativeTo(parent);
         setVisible(true);
     }
