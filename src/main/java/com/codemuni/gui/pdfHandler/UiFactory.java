@@ -1,10 +1,12 @@
 package com.codemuni.gui.pdfHandler;
 
+import com.codemuni.utils.UIConstants;
+
 import javax.swing.*;
 import java.awt.*;
 
 /**
- * Small helpers to reduce UI boilerplate.
+ * UI component factory helpers.
  */
 public final class UiFactory {
     private UiFactory() {
@@ -14,7 +16,7 @@ public final class UiFactory {
         JButton button = new JButton(text);
         button.setMargin(new Insets(5, 10, 5, 10));
         if (bg != null) button.setBackground(bg);
-        button.setForeground(Color.WHITE);
+        button.setForeground(UIConstants.Colors.TEXT_PRIMARY);
         return button;
     }
 

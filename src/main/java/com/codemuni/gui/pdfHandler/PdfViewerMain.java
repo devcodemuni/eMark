@@ -269,19 +269,15 @@ public class PdfViewerMain extends JFrame {
             if (ok) {
                 setWindowTitle(file.getAbsolutePath());
 
-                // Check if PDF is certified (may restrict additional signatures)
-                boolean isCertified = verificationService.isPdfCertified(file, pdfPassword);
-                topBar.setSignButtonCertified(isCertified);
+                // Initialize with signing disabled until verification completes
+                topBar.setSignButtonCertified(true); // Temporarily disable until we verify
                 topBar.setSignButtonVisible(true);
-
-                if (isCertified) {
-                    log.info("PDF is certified - signing disabled");
-                }
 
                 topBar.setPageInfoText("Page: 1/" + pdfRendererService.getPageCountSafe());
                 showPlaceholder(false);
 
                 // Verify signatures and update signature panel
+                // Certification check will be done after verification completes
                 verifyAndUpdateSignatures(file);
             } else {
                 selectedPdfFile = null;
@@ -326,6 +322,26 @@ public class PdfViewerMain extends JFrame {
                     signaturePanel.setVerificationStatus("");
 
                     if (results != null && !results.isEmpty()) {
+                        // Apply PDF viewer certification logic for Begin Sign button
+                        // Get LAST signature (most recent)
+                        SignatureVerificationService.SignatureVerificationResult lastSig = results.get(results.size() - 1);
+                        com.codemuni.model.CertificationLevel lastCertLevel = lastSig.getCertificationLevel();
+
+                        // Begin Sign button logic (PDF viewer style)
+                        boolean allowsSignatures = lastCertLevel.allowsSignatures(); // true only for NOT_CERTIFIED
+                        topBar.setSignButtonCertified(!allowsSignatures);
+
+                        if (!allowsSignatures) {
+                            // Certified - show simple message
+                            String tooltipMsg = "This document is certified. You cannot add more signatures.";
+                            topBar.setSignButtonTooltip(tooltipMsg);
+                            log.info("Signing DISABLED: " + tooltipMsg);
+                        } else {
+                            // Not certified - signing allowed
+                            topBar.setSignButtonTooltip(null);
+                            log.info("Signing ENABLED: Document allows additional signatures");
+                        }
+
                         // PDF is signed - update signature panel (but keep it closed initially)
                         signaturePanel.updateSignatures(results);
                         signaturePanel.setVisible(true); // Make toggle button visible
@@ -339,11 +355,15 @@ public class PdfViewerMain extends JFrame {
 
                         log.info("Signature panel updated with " + results.size() + " signature(s)");
                     } else {
-                        // PDF is not signed - hide signature panel and banner
+                        // PDF is not signed - enable signing (unsigned PDF, signing allowed)
+                        topBar.setSignButtonCertified(false);
+                        topBar.setSignButtonTooltip(null);
+
+                        // Hide signature panel and banner
                         signaturePanel.clearSignatures();
                         signaturePanel.setVisible(false);
                         verificationBanner.hideBanner();
-                        log.info("No signatures found - signature panel hidden");
+                        log.info("No signatures found - signature panel hidden, signing enabled");
                     }
                     layoutOverlayComponents();
                 });

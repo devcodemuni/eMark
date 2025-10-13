@@ -43,14 +43,6 @@ public class WindowsKeyStoreProvider extends X509CertificateValidatorImpl implem
         return provider;
     }
 
-    public BouncyCastleProvider getCryptoProvider() {
-        return cryptoProvider;
-    }
-
-    public String getSerialHex() {
-        return serialHex;
-    }
-
     public void setSerialHex(String serialHex) {
         this.serialHex = serialHex;
     }
@@ -71,9 +63,6 @@ public class WindowsKeyStoreProvider extends X509CertificateValidatorImpl implem
 
                 X509Certificate x509Cert = (X509Certificate) cert;
 
-                // TODO: Validate certificate signature
-
-                // Wrap as CertificateInfo (no token serial for Windows)
                 result.add(new KeystoreAndCertificateInfo(x509Cert, WIN_KEY_STORE, null, null));
             }
 

@@ -22,7 +22,7 @@ public class TopBarPanel extends JPanel {
     private static final String OPEN_PDF_TEXT = "Open PDF";
     private static final String BEGIN_SIGN_TEXT = "Begin Sign";
     private static final String CANCEL_SIGN_TEXT = "Cancel Signing (ESC)";
-    private static final String CERTIFIED_TEXT = "\ud83d\udd0f Document Certified";
+    private static final String CERTIFIED_TEXT = "\ud83d\udd0f Certified";
     private static final Log log = LogFactory.getLog(TopBarPanel.class);
 
     private final JButton openBtn;
@@ -122,11 +122,25 @@ public class TopBarPanel extends JPanel {
             signBtn.setText(CERTIFIED_TEXT);
             signBtn.setEnabled(false);
             signBtn.setVisible(true);
-            signBtn.setToolTipText("This document is certified. Additional signatures are not allowed.");
+            // Default tooltip - can be overridden by setSignButtonTooltip()
+            if (signBtn.getToolTipText() == null || signBtn.getToolTipText().isEmpty()) {
+                signBtn.setToolTipText("This document is certified. You cannot add more signatures.");
+            }
         } else {
             signBtn.setEnabled(true);
             signBtn.setToolTipText(null);
             updateSignButtonText();
+        }
+    }
+
+    /**
+     * Sets tooltip for the sign button (PDF viewer style)
+     */
+    public void setSignButtonTooltip(String tooltip) {
+        if (tooltip != null && !tooltip.isEmpty()) {
+            signBtn.setToolTipText(tooltip);
+        } else {
+            signBtn.setToolTipText(null);
         }
     }
 

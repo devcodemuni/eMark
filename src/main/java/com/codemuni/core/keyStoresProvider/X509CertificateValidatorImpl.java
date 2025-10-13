@@ -1,14 +1,5 @@
 package com.codemuni.core.keyStoresProvider;
 
-import com.codemuni.core.keyStoresProvider.X509CertificateValidator;
-import org.bouncycastle.asn1.ASN1InputStream;
-import org.bouncycastle.asn1.ASN1Sequence;
-import org.bouncycastle.asn1.DERIA5String;
-import org.bouncycastle.asn1.x509.AccessDescription;
-import org.bouncycastle.asn1.x509.AuthorityInformationAccess;
-import org.bouncycastle.asn1.x509.GeneralName;
-
-import java.net.URL;
 import java.security.PublicKey;
 import java.security.cert.*;
 import java.util.Date;
@@ -91,39 +82,4 @@ public class X509CertificateValidatorImpl implements X509CertificateValidator {
         }
     }
 
-    /**
-     * Helper: fetch issuer certificate (should be implemented with a real store)
-     */
-    private X509Certificate getIssuerCertificate(X509Certificate certificate) {
-        // TODO: Replace with actual issuer lookup from store or chain
-        return null;
-    }
-
-    /**
-     * Helper: extract OCSP URL from certificate
-     */
-    private URL getOCSPUrl(X509Certificate cert) {
-        try {
-            byte[] aiaExt = cert.getExtensionValue("1.3.6.1.5.5.7.1.1"); // Authority Info Access
-            if (aiaExt == null) return null;
-
-            ASN1InputStream aIn = new ASN1InputStream(aiaExt);
-            ASN1Sequence seq = (ASN1Sequence) aIn.readObject();
-            aIn.close();
-
-            AuthorityInformationAccess aia = AuthorityInformationAccess.getInstance(seq);
-            for (AccessDescription ad : aia.getAccessDescriptions()) {
-                if (ad.getAccessMethod().equals(AccessDescription.id_ad_ocsp)) {
-                    GeneralName gn = ad.getAccessLocation();
-                    if (gn.getTagNo() == GeneralName.uniformResourceIdentifier) {
-                        DERIA5String str = DERIA5String.getInstance(gn.getName());
-                        return new URL(str.getString());
-                    }
-                }
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        return null;
-    }
 }

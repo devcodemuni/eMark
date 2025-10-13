@@ -31,10 +31,8 @@ public class App {
     }
 
     public static void main(String[] args) {
-        AppInitializer.initialize();      // initialize folders and config
-        configureProxyFromConfig();       // read proxy from config
-
-//        resetDialogPreferences();
+        AppInitializer.initialize();
+        configureProxyFromConfig();
 
         SwingUtilities.invokeLater(() -> {
             if (!isJava8()) {
@@ -95,9 +93,6 @@ public class App {
         }
     }
 
-    /**
-     * Reads proxy from config and sets system properties
-     */
     private static void configureProxyFromConfig() {
         Map<String, String> proxy = ConfigManager.getProxySettings();
         String host = proxy.getOrDefault("host", "").trim();

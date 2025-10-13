@@ -14,7 +14,7 @@ import java.util.List;
 
 /**
  * Service for detecting and managing unsigned signature fields (/Sig AcroForm fields) in PDF documents.
- * Supports Adobe Acrobat and PAdES-compliant viewers.
+ * Supports PDF viewers and PAdES-compliant applications.
  */
 public class SignatureFieldDetectionService {
 

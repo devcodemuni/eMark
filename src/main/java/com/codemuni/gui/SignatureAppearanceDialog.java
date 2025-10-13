@@ -28,6 +28,8 @@ import java.util.prefs.Preferences;
 
 import static com.codemuni.core.keyStoresProvider.X509SubjectUtils.getCommonName;
 import static com.codemuni.core.keyStoresProvider.X509SubjectUtils.getOrganization;
+import static com.itextpdf.text.pdf.PdfSigLockDictionary.LockPermissions.FORM_FILLING;
+import static com.itextpdf.text.pdf.PdfSigLockDictionary.LockPermissions.FORM_FILLING_AND_ANNOTATION;
 
 public class SignatureAppearanceDialog extends JDialog {
 
@@ -430,8 +432,8 @@ public class SignatureAppearanceDialog extends JDialog {
         // Check if we should hide the left label
         boolean isNameAndDescription = "Name and Description".equals(renderingMode);
         boolean isGreenTickEnabled = greenTickCheckbox.isSelected();
-        // Assume "Editable" would be a specific label; if not present, all are non-editable
-        boolean isNotEditable = !"Editable".equals(certLevelLabel); // or use enum if available
+        // Check if NOT_CERTIFIED (which allows editing/additional signatures)
+        boolean isNotEditable = !CertificationLevel.NOT_CERTIFIED.getLabel().equals(certLevelLabel);
 
         if (isNameAndDescription && isGreenTickEnabled && isNotEditable) {
             // Return an empty, invisible label
@@ -531,10 +533,10 @@ public class SignatureAppearanceDialog extends JDialog {
             case NO_CHANGES_ALLOWED:
                 certLevel = PdfSignatureAppearance.CERTIFIED_NO_CHANGES_ALLOWED;
                 break;
-            case FORM_FILLING:
+            case FORM_FILLING_CERTIFIED:
                 certLevel = PdfSignatureAppearance.CERTIFIED_FORM_FILLING;
                 break;
-            case FORM_FILLING_AND_ANNOTATION:
+            case FORM_FILLING_AND_ANNOTATION_CERTIFIED:
                 certLevel = PdfSignatureAppearance.CERTIFIED_FORM_FILLING_AND_ANNOTATIONS;
                 break;
         }
@@ -548,7 +550,7 @@ public class SignatureAppearanceDialog extends JDialog {
         appearanceOptions.setLtvEnabled(ltvCheckbox.isSelected());
         appearanceOptions.setTimestampEnabled(timestampCheckbox.isSelected());
         appearanceOptions.setGreenTickEnabled(!isGraphicRendering &&  greenTickCheckbox.isSelected()); // Only enable green tick for text rendering not with graphic rendering
-        appearanceOptions.setFormatterType((SignatureDateFormats.FormatterType) dateFormatOptions.getSelectedItem());
+        appearanceOptions.setDateFormat((SignatureDateFormats.FormatterType) dateFormatOptions.getSelectedItem());
         appearanceOptions.setGraphicImagePath(
                 selectedRendering == RenderingMode.NAME_AND_GRAPHIC && selectedImageFile != null
                         ? selectedImageFile.getAbsolutePath()

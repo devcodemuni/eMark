@@ -2,6 +2,7 @@ package com.codemuni.service;
 
 import com.codemuni.App;
 import com.codemuni.utils.AppConstants;
+import com.codemuni.utils.UIConstants;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -191,17 +192,15 @@ public class VersionManager {
     }
 
     /**
-     * Makes a label clickable to open GitHub release page if update is available.
-     *
-     * @param label JLabel to make clickable
+     * Makes a label clickable to open GitHub release page.
      */
     public static void makeLabelClickable(final JLabel label) {
         label.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         label.setOpaque(true);
-        label.setBackground(new Color(255, 230, 230));
-        label.setForeground(new Color(200, 0, 0));
-        label.setBorder(BorderFactory.createEmptyBorder(4, 8, 4, 8)); // padding
-        label.setText("<html><b>🔔 Update available!</b></html>");
+        label.setBackground(UIConstants.Colors.STATUS_WARNING);
+        label.setForeground(UIConstants.Colors.TEXT_PRIMARY);
+        label.setBorder(BorderFactory.createEmptyBorder(4, 8, 4, 8));
+        label.setText("<html><b>Update available!</b></html>");
         label.setToolTipText("Visit the official eMark website to download the latest version");
 
         label.addMouseListener(new java.awt.event.MouseAdapter() {
@@ -216,32 +215,29 @@ public class VersionManager {
 
             @Override
             public void mouseEntered(java.awt.event.MouseEvent e) {
-                label.setText("<html><b><u>🔔 Update available!</u></b></html>");
-                label.setBackground(new Color(255, 210, 210)); // darker hover
-                label.setForeground(new Color(160, 0, 0));
+                label.setText("<html><b><u>Update available!</u></b></html>");
+                label.setBackground(UIConstants.Colors.BUTTON_SECONDARY_HOVER);
             }
 
             @Override
             public void mouseExited(java.awt.event.MouseEvent e) {
-                label.setText("<html><b>🔔 Update available!</b></html>");
-                label.setBackground(new Color(255, 230, 230));
-                label.setForeground(new Color(200, 0, 0));
+                label.setText("<html><b>Update available!</b></html>");
+                label.setBackground(UIConstants.Colors.STATUS_WARNING);
             }
 
             @Override
             public void mousePressed(java.awt.event.MouseEvent e) {
-                label.setBackground(new Color(255, 180, 180)); // click feedback
+                label.setBackground(UIConstants.Colors.BUTTON_SECONDARY);
             }
 
             @Override
             public void mouseReleased(java.awt.event.MouseEvent e) {
-                label.setBackground(new Color(255, 210, 210));
+                label.setBackground(UIConstants.Colors.BUTTON_SECONDARY_HOVER);
             }
         });
 
-        // Rounded background effect
         label.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(new Color(200, 0, 0), 1, true),
+                BorderFactory.createLineBorder(UIConstants.Colors.BORDER_PRIMARY, 1, true),
                 BorderFactory.createEmptyBorder(4, 8, 4, 8)
         ));
     }

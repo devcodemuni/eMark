@@ -181,7 +181,7 @@ public class SignatureVerificationBanner extends JPanel {
 
     /**
      * Updates the banner based on verification results.
-     * Follows Adobe Reader DC logic:
+     * Follows PDF viewer logic:
      * - ALL_VALID (green): All signatures valid AND trusted
      * - SOME_INVALID (yellow): Mixed results OR valid but not trusted
      * - ALL_INVALID (red): All signatures invalid (modified/revoked/expired)
@@ -229,7 +229,7 @@ public class SignatureVerificationBanner extends JPanel {
             }
         }
 
-        // Determine overall status (Adobe Reader DC style)
+        // Determine overall status (PDF viewer style)
         VerificationStatus newStatus;
         if (invalid > 0) {
             // If ANY signature is invalid, show red/invalid
@@ -275,7 +275,7 @@ public class SignatureVerificationBanner extends JPanel {
 
     /**
      * Updates the UI based on verification status.
-     * Adobe Reader DC style messages with specific failure reasons:
+     * PDF viewer style messages with specific failure reasons:
      * - Green: "Signed and all signatures are valid"
      * - Yellow: "At least one signature has problems" or "Valid but identity of signer could not be verified"
      * - Red: "At least one signature is invalid" with specific reason
@@ -387,12 +387,12 @@ public class SignatureVerificationBanner extends JPanel {
 
     /**
      * Determines if a signature is valid based on verification result.
-     * Adobe Reader DC considers a signature valid if:
+     * PDF viewer considers a signature valid if:
      * 1. Document integrity is intact (not modified after signing)
      * 2. Signature cryptographically valid
      * 3. Certificate is valid (not expired)
      * 4. Certificate is not revoked
-     * 
+     *
      * Note: Certificate trust is checked separately and shown as warning, not error
      */
     private boolean isSignatureValid(SignatureVerificationResult result) {
@@ -403,7 +403,7 @@ public class SignatureVerificationBanner extends JPanel {
         if (result.isCertificateRevoked()) return false;
         
         // If certificate is not trusted, it's still technically "valid" but with warning
-        // Adobe Reader shows this as yellow/unknown, not red/invalid
+        // PDF viewer shows this as yellow/unknown, not red/invalid
         return true;
     }
 

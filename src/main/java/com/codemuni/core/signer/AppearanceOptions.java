@@ -7,11 +7,9 @@ import java.util.Arrays;
 import java.util.Objects;
 
 /**
- * Encapsulates options for customizing the appearance of a digital signature in a PDF.
+ * Options for customizing PDF signature appearance.
  */
 public class AppearanceOptions {
-
-//    private PdfSignatureAppearance.RenderingMode renderingMode = PdfSignatureAppearance.RenderingMode.NAME_AND_DESCRIPTION;
 
     private boolean graphicRendering = false;
     private String graphicImagePath;
@@ -29,12 +27,6 @@ public class AppearanceOptions {
     private boolean ltvEnabled = false;
     private boolean timestampEnabled = false;
     private boolean greenTickEnabled = false;
-
-    private SignatureDateFormats.FormatterType formatterType;
-
-    public void setFormatterType(SignatureDateFormats.FormatterType formatterType) {
-        this.formatterType = formatterType;
-    }
 
     private int pageNumber = 1;
     private int[] coordinates = {0, 0, 0, 0};

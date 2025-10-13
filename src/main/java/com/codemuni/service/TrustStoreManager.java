@@ -451,7 +451,7 @@ public class TrustStoreManager {
 
     /**
      * Gets all trust anchors from configured sources (embedded + manual + OS trust store).
-     * Now includes OS trust stores for Adobe Reader compatibility.
+     * Now includes OS trust stores for PDF viewer compatibility.
      */
     public Set<TrustAnchor> getAllTrustAnchors() {
         if (!initialized) {
@@ -470,7 +470,7 @@ public class TrustStoreManager {
             trustAnchors.add(new TrustAnchor(cert, null));
         }
 
-        // Add OS trust store certificates for Adobe Reader compatibility
+        // Add OS trust store certificates for PDF viewer compatibility
         try {
             Set<TrustAnchor> osTrustAnchors = getOSTrustAnchors();
             trustAnchors.addAll(osTrustAnchors);
@@ -488,7 +488,7 @@ public class TrustStoreManager {
 
     /**
      * Gets Windows trust store anchors (Windows only).
-     * Now used for signature verification to match Adobe Reader behavior.
+     * Now used for signature verification to match PDF viewer behavior.
      */
     private Set<TrustAnchor> getOSTrustAnchors() throws Exception {
         Set<TrustAnchor> anchors = new HashSet<>();

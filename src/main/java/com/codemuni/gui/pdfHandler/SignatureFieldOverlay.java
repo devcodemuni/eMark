@@ -344,7 +344,7 @@ public class SignatureFieldOverlay extends JPanel {
     }
 
     /**
-     * Draws corner L-shaped markers for visual clarity (Adobe Reader style).
+     * Draws corner L-shaped markers for visual clarity (PDF viewer style).
      * Enhanced with better visibility and smooth animations.
      */
     private void drawCornerMarkers(Graphics2D g2, Rectangle rect, Color color, boolean isHovered) {
@@ -398,7 +398,7 @@ public class SignatureFieldOverlay extends JPanel {
     }
 
     /**
-     * Draws an attractive label inside the field with instructions (Adobe Reader style).
+     * Draws an attractive label inside the field with instructions (PDF viewer style).
      * Enhanced with better typography and visibility.
      */
     private void drawFieldLabel(Graphics2D g2, Rectangle rect, SignatureFieldInfo field, boolean isHovered) {

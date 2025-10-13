@@ -2,19 +2,19 @@ package com.codemuni.utils;
 
 import java.awt.*;
 
-// Keep all UI colors, fonts, and sizes in one place so changes are easy
+/**
+ * Central constants for UI theming - colors, fonts, dimensions, padding.
+ */
 public final class UIConstants {
 
-    // Can't create instances of this class
     private UIConstants() {
         throw new AssertionError("Cannot instantiate UIConstants");
     }
 
     // ==================== COLORS ====================
 
-    // Dark theme colors used throughout the app
     public static final class Colors {
-        // Primary backgrounds
+        // Backgrounds
         public static final Color BG_PRIMARY = new Color(45, 45, 45);      // Main background
         public static final Color BG_SECONDARY = new Color(40, 40, 40);    // Secondary background
         public static final Color BG_TERTIARY = new Color(35, 35, 35);     // Panel background
@@ -62,7 +62,6 @@ public final class UIConstants {
 
     // ==================== FONTS ====================
 
-    // Standard fonts and sizes
     public static final class Fonts {
         public static final String FAMILY = "Segoe UI";
 
@@ -90,7 +89,6 @@ public final class UIConstants {
 
     // ==================== DIMENSIONS ====================
 
-    // Standard sizes and spacing values
     public static final class Dimensions {
         // Spacing
         public static final int SPACING_TINY = 4;
@@ -126,7 +124,6 @@ public final class UIConstants {
 
     // ==================== PADDING ====================
 
-    // Pre-made padding borders for common spacing needs
     public static final class Padding {
         public static final javax.swing.border.EmptyBorder TINY =
             new javax.swing.border.EmptyBorder(4, 4, 4, 4);
@@ -142,13 +139,7 @@ public final class UIConstants {
 
     // ==================== HELPER METHODS ====================
 
-    // Quick way to make a button size with consistent height
     public static Dimension buttonSize(int width) {
         return new Dimension(width, Dimensions.BUTTON_HEIGHT);
-    }
-
-    // Make a square dimension for icons
-    public static Dimension iconSize(int size) {
-        return new Dimension(size, size);
     }
 }

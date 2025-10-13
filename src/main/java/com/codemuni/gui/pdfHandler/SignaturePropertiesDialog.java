@@ -356,18 +356,57 @@ public class SignaturePropertiesDialog extends JDialog {
 
             // Timestamp status explanation
             if (result.isTimestampValid()) {
-                addDetailRow(panel, "Status", "✓ Timestamp verified successfully");
+                addDetailRow(panel, "Status", "Verified");
             } else if (result.getTimestampDate() != null) {
-                addDetailRow(panel, "Status", "⚠ Timestamp present but verification failed");
+                addDetailRow(panel, "Status", "Could not verify timestamp");
             }
         } else {
             // No timestamp at all
             panel.add(Box.createRigidArea(new Dimension(0, 8)));
             addSectionSubheader(panel, "Timestamp Information");
-            addDetailRow(panel, "Status", "Not included in this signature");
+            addDetailRow(panel, "Status", "No timestamp");
+        }
+
+        // Certification Information (PDF viewer style)
+        panel.add(Box.createRigidArea(new Dimension(0, 8)));
+        addSectionSubheader(panel, "Certification Information");
+
+        if (result.isCertificationSignature()) {
+            addDetailRow(panel, "Type", "Certified Signature");
+            addDetailRow(panel, "Can Add More Signatures",
+                result.getCertificationLevel().allowsSignatures() ? "Yes" : "No");
+
+            // Explain what this certification level means
+            String explanation = getCertificationLevelExplanation(result.getCertificationLevel());
+            addDetailRow(panel, "What This Means", explanation);
+        } else {
+            addDetailRow(panel, "Type", "Regular Signature");
+            addDetailRow(panel, "Can Add More Signatures", "Yes");
+            addDetailRow(panel, "What This Means",
+                "This is a regular signature. You can add more signatures to this document.");
         }
 
         return panel;
+    }
+
+    /**
+     * Gets user-friendly explanation for certification level.
+     */
+    private String getCertificationLevelExplanation(com.codemuni.model.CertificationLevel level) {
+        switch (level) {
+            case NO_CHANGES_ALLOWED:
+                return "This document is certified. No changes are allowed. " +
+                       "Changing the document will make all signatures invalid.";
+            case FORM_FILLING_AND_ANNOTATION_CERTIFIED:
+                return "This document is certified. You can fill forms and add annotations. " +
+                       "You cannot add more signatures.";
+            case FORM_FILLING_CERTIFIED:
+                return "This document is certified. You can only fill forms. " +
+                       "You cannot add more signatures.";
+            case NOT_CERTIFIED:
+            default:
+                return "This is a regular signature. You can add more signatures to this document.";
+        }
     }
 
     private JPanel createCertificateInfoContent() {
@@ -477,7 +516,7 @@ public class SignaturePropertiesDialog extends JDialog {
 
         if (result.getTotalRevisions() > 0) {
             addDetailRow(panel, "Signature Revision", result.getRevision() + " of " + result.getTotalRevisions());
-            addStatusRow(panel, "Covers Whole Document", result.isCoversWholeDocument());
+            addDetailRow(panel, "Covers Whole Document", result.isCoversWholeDocument() ? "Yes" : "No");
         }
 
         if (result.getPageNumber() > 0) {

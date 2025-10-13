@@ -235,7 +235,7 @@ public class SignModeController {
         int totalPages = rendererService.getPageCountSafe();
         float scale = PdfRendererService.RENDER_DPI / 72f;
 
-        // Adobe Reader style: Enable BOTH modes
+        // PDF viewer style: Enable BOTH modes
         // - User can click on unsigned fields (green overlays)
         // - User can also draw new rectangles anywhere on PDF
         for (int i = 0; i < totalPages; i++) {
@@ -534,7 +534,7 @@ public class SignModeController {
     /**
      * Handles signing an existing signature field when clicked.
      * This method is called when a user clicks on a highlighted signature field overlay.
-     * Opens the signature appearance dialog directly (Adobe Reader style).
+     * Opens the signature appearance dialog directly (PDF viewer style).
      *
      * @param fieldInfo Information about the signature field to sign
      */

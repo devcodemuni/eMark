@@ -18,7 +18,7 @@ import java.util.*;
 
 /**
  * Service for verifying digital signatures in PDF documents.
- * Implements Adobe Reader DC-level signature verification including:
+ * Implements PDF viewer-level signature verification including:
  * - Document integrity verification
  * - Signature validity check
  * - Certificate validation
@@ -112,6 +112,10 @@ public class SignatureVerificationService {
         // Position information (for rectangle overlay)
         private int pageNumber = -1;
         private float[] position; // [llx, lly, urx, ury] in PDF coordinates
+
+        // Certification information (PDF viewer style)
+        private com.codemuni.model.CertificationLevel certificationLevel = com.codemuni.model.CertificationLevel.NOT_CERTIFIED;
+        private boolean isCertificationSignature = false;
 
         public SignatureVerificationResult(String fieldName, String signerName, Date signDate,
                                                   String reason, String location, String contactInfo) {
@@ -347,9 +351,25 @@ public class SignatureVerificationService {
             this.position = position;
         }
 
+        public com.codemuni.model.CertificationLevel getCertificationLevel() {
+            return certificationLevel;
+        }
+
+        public void setCertificationLevel(com.codemuni.model.CertificationLevel certificationLevel) {
+            this.certificationLevel = certificationLevel;
+        }
+
+        public boolean isCertificationSignature() {
+            return isCertificationSignature;
+        }
+
+        public void setCertificationSignature(boolean certificationSignature) {
+            this.isCertificationSignature = certificationSignature;
+        }
+
         /**
          * Returns overall verification status based on all checks.
-         * Adobe Reader style: If revocation cannot be verified, signature is UNKNOWN.
+         * PDF viewer style: If revocation cannot be verified, signature is UNKNOWN.
          */
         public VerificationStatus getOverallStatus() {
             // Critical failures - INVALID
@@ -363,7 +383,7 @@ public class SignatureVerificationService {
                 return VerificationStatus.INVALID;
             }
 
-            // Revocation issues - UNKNOWN (Adobe Reader style)
+            // Revocation issues - UNKNOWN (PDF viewer style)
             if (revocationStatus.startsWith("Unknown") || revocationStatus.equals("Not Checked")) {
                 return VerificationStatus.UNKNOWN;
             }
@@ -405,7 +425,7 @@ public class SignatureVerificationService {
     }
 
     /**
-     * Overall verification status enum (Adobe Reader DC style).
+     * Overall verification status enum (PDF viewer style).
      */
     public enum VerificationStatus {
         VALID,      // Green checkmark - All checks passed
@@ -546,7 +566,111 @@ public class SignatureVerificationService {
             }
         }
 
+        // Apply PDF viewer certification rules before returning
+        applyPdfViewerCertificationRules(results);
+
         return results;
+    }
+
+    /**
+     * Applies PDF viewer verification rules for certification levels.
+     * This method modifies verification results based on the certification status
+     * of the LAST signature in the document.
+     *
+     * PDF Viewer Rules:
+     * - Case 1: Last sig is NO_CHANGES_ALLOWED → only last valid, all previous invalid
+     * - Case 2: Last sig is FORM_FILLING_* → all valid if all previous were NOT_CERTIFIED
+     * - Case 3: Last sig is NOT_CERTIFIED → all valid if all previous were NOT_CERTIFIED
+     *
+     * @param results List of verification results in chronological order
+     */
+    private void applyPdfViewerCertificationRules(List<SignatureVerificationResult> results) {
+        if (results == null || results.isEmpty()) {
+            return;
+        }
+
+        // Get last signature (most recent modification)
+        SignatureVerificationResult lastSig = results.get(results.size() - 1);
+        com.codemuni.model.CertificationLevel lastCertLevel = lastSig.getCertificationLevel();
+
+        log.info("=== Applying PDF Viewer Certification Rules ===");
+        log.info("Last signature certification level: " + lastCertLevel.getLabel());
+        log.info("Total signatures: " + results.size());
+
+        // CASE 1: Last signature is NO_CHANGES_ALLOWED (P=1)
+        if (lastCertLevel == com.codemuni.model.CertificationLevel.NO_CHANGES_ALLOWED) {
+            log.warn("Case 1: Last signature is NO_CHANGES_ALLOWED - invalidating all previous signatures");
+
+            // Invalidate ALL previous signatures
+            for (int i = 0; i < results.size() - 1; i++) {
+                SignatureVerificationResult prevSig = results.get(i);
+
+                // Mark as invalid with specific error
+                prevSig.setDocumentIntact(false);
+                prevSig.addVerificationError(
+                    "Document was changed after signing. This signature is no longer valid."
+                );
+
+                log.info("  [" + i + "] " + prevSig.getFieldName() + " → INVALIDATED");
+            }
+
+            // Last signature status depends on its own verification
+            log.info("  [" + (results.size() - 1) + "] " + lastSig.getFieldName() +
+                     " → " + (lastSig.getOverallStatus() == VerificationStatus.VALID ? "VALID" : "CHECK VERIFICATION"));
+        }
+
+        // CASE 2: Last signature is FORM_FILLING_* (P=2 or P=3)
+        else if (lastCertLevel == com.codemuni.model.CertificationLevel.FORM_FILLING_CERTIFIED ||
+                 lastCertLevel == com.codemuni.model.CertificationLevel.FORM_FILLING_AND_ANNOTATION_CERTIFIED) {
+
+            log.info("Case 2: Last signature is " + lastCertLevel.getLabel() +
+                     " - verifying all previous are NOT_CERTIFIED");
+
+            // Check if all earlier signatures are NOT_CERTIFIED
+            boolean allPreviousAreApprovalSignatures = true;
+            for (int i = 0; i < results.size() - 1; i++) {
+                SignatureVerificationResult prevSig = results.get(i);
+                if (prevSig.getCertificationLevel() != com.codemuni.model.CertificationLevel.NOT_CERTIFIED) {
+                    allPreviousAreApprovalSignatures = false;
+                    log.warn("  [" + i + "] " + prevSig.getFieldName() +
+                             " is " + prevSig.getCertificationLevel().getLabel() + " (NOT allowed before FORM_FILLING_*)");
+                    break;
+                }
+            }
+
+            if (allPreviousAreApprovalSignatures) {
+                log.info("✓ All previous signatures are NOT_CERTIFIED - all signatures remain valid");
+                // All signatures remain valid based on their individual verification status
+            } else {
+                log.warn("✗ Found certified signature before last FORM_FILLING_* signature - document integrity compromised");
+                // Optionally invalidate signatures here if strict PDF viewer compliance needed
+            }
+        }
+
+        // CASE 3: Last signature is NOT_CERTIFIED (P=0)
+        else if (lastCertLevel == com.codemuni.model.CertificationLevel.NOT_CERTIFIED) {
+            log.info("Case 3: Last signature is NOT_CERTIFIED - verifying all previous are NOT_CERTIFIED");
+
+            // Check if all signatures are NOT_CERTIFIED (multiple approval signatures)
+            boolean allAreApprovalSignatures = true;
+            for (SignatureVerificationResult sig : results) {
+                if (sig.getCertificationLevel() != com.codemuni.model.CertificationLevel.NOT_CERTIFIED) {
+                    allAreApprovalSignatures = false;
+                    log.warn("  Found certified signature: " + sig.getFieldName() +
+                             " (" + sig.getCertificationLevel().getLabel() + ")");
+                    break;
+                }
+            }
+
+            if (allAreApprovalSignatures) {
+                log.info("✓ All signatures are approval signatures (NOT_CERTIFIED) - all valid, signing allowed");
+                // All signatures remain valid, additional signatures allowed
+            } else {
+                log.info("⚠ Mixed certification levels detected - verify document modification rules");
+            }
+        }
+
+        log.info("=== PDF Viewer Certification Rules Applied ===");
     }
 
     /**
@@ -607,13 +731,13 @@ public class SignatureVerificationService {
             result.setTotalRevisions(totalRevisions);
             result.setCoversWholeDocument(revision == totalRevisions);
 
-            // 1. DOCUMENT INTEGRITY CHECK (Adobe Reader-style)
+            // 1. DOCUMENT INTEGRITY CHECK (PDF viewer-style)
             notifyProgress("Checking document integrity...");
             boolean documentIntact = verifyDocumentIntegrity(acroFields, signatureName, revision, totalRevisions, pkcs7);
             result.setDocumentIntact(documentIntact);
 
             if (!documentIntact) {
-                result.addVerificationError("Document has been altered after signing");
+                result.addVerificationError("Document was changed after signing");
             } else if (revision < totalRevisions) {
                 // Signature is valid but not the last one - this is informational
                 result.addVerificationInfo("Signature is valid. Document has additional signatures or modifications after this signature.");
@@ -624,7 +748,7 @@ public class SignatureVerificationService {
             boolean signatureValid = pkcs7.verify();
             result.setSignatureValid(signatureValid);
             if (!signatureValid) {
-                result.addVerificationError("Signature validation failed - document has been altered or signature is corrupt");
+                result.addVerificationError("This signature is not valid");
             }
 
             // 3. CERTIFICATE INFORMATION
@@ -639,7 +763,7 @@ public class SignatureVerificationService {
                 result.setCertificateValidTo(signerCert.getNotAfter());
 
                 // 4. CERTIFICATE VALIDITY CHECK
-                // Adobe Reader checks validity at BOTH signing time and current time
+                // PDF viewers check validity at BOTH signing time and current time
                 try {
                     // Check validity at current time
                     signerCert.checkValidity();
@@ -651,18 +775,15 @@ public class SignatureVerificationService {
                             signerCert.checkValidity(signDate);
                             result.addVerificationInfo("Certificate was valid at signing time");
                         } catch (CertificateExpiredException | CertificateNotYetValidException e) {
-                            result.addVerificationWarning("Certificate was not valid at signing time (" +
-                                DATE_FORMAT.format(signDate) + ")");
+                            result.addVerificationWarning("Certificate was not valid when document was signed");
                         }
                     }
                 } catch (CertificateExpiredException e) {
                     result.setCertificateValid(false);
-                    result.addVerificationError("Certificate has expired (expired on " +
-                        DATE_FORMAT.format(signerCert.getNotAfter()) + ")");
+                    result.addVerificationError("Certificate has expired");
                 } catch (CertificateNotYetValidException e) {
                     result.setCertificateValid(false);
-                    result.addVerificationError("Certificate is not yet valid (valid from " +
-                        DATE_FORMAT.format(signerCert.getNotBefore()) + ")");
+                    result.addVerificationError("Certificate is not yet valid");
                 }
 
                 // 5. CERTIFICATE CHAIN VERIFICATION
@@ -675,7 +796,7 @@ public class SignatureVerificationService {
                 }
                 result.setCertificateChain(certChain);
 
-                // Check if certificate is trusted (Adobe Reader-level verification)
+                // Check if certificate is trusted (PDF viewer-level verification)
                 notifyProgress("Verifying certificate trust...");
                 try {
                     verifyCertificateChain(certChain);
@@ -689,7 +810,7 @@ public class SignatureVerificationService {
                     log.warn("Certificate trust verification: FAILED - " + e.getMessage());
                 }
 
-                // Check certificate revocation status (OCSP) - Adobe Reader style
+                // Check certificate revocation status (OCSP) - PDF viewer style
             notifyProgress("Checking revocation status (OCSP)...");
             checkRevocationStatus(signerCert, pkcs7, result);
             } else {
@@ -719,7 +840,7 @@ public class SignatureVerificationService {
                 log.info("Timestamp: Not enabled");
             }
 
-            // 8. LTV INFORMATION (Adobe Reader-style check)
+            // 8. LTV INFORMATION (PDF viewer-style check)
             // Check if document has DSS (Document Security Store) for LTV
             boolean hasLTV = checkLTVEnabled(reader, pkcs7);
             result.setHasLTV(hasLTV);
@@ -749,8 +870,26 @@ public class SignatureVerificationService {
                 log.debug("Could not extract signature position", e);
             }
 
+            // 10. CERTIFICATION LEVEL DETECTION (PDF viewer style)
+            log.info("Detecting certification level for signature: " + signatureName);
+            boolean isCert = isCertificationSignature(acroFields, signatureName);
+            result.setCertificationSignature(isCert);
+
+            if (isCert) {
+                int pValue = getCertificationLevel(acroFields, signatureName);
+                com.codemuni.model.CertificationLevel certLevel =
+                    com.codemuni.model.CertificationLevel.fromPValue(pValue);
+                result.setCertificationLevel(certLevel);
+                log.info("✓ Certification signature detected: " + certLevel.getLabel() +
+                         " (P=" + pValue + ")");
+            } else {
+                result.setCertificationLevel(com.codemuni.model.CertificationLevel.NOT_CERTIFIED);
+                log.info("✓ Approval signature (NOT_CERTIFIED)");
+            }
+
             log.info("Signature verification completed for: " + signatureName +
                      " - Status: " + result.getOverallStatus() +
+                     " - Certification: " + result.getCertificationLevel().getLabel() +
                      " - Page: " + result.getPageNumber());
 
         } catch (Exception e) {
@@ -762,7 +901,7 @@ public class SignatureVerificationService {
     }
 
     /**
-     * Verifies the certificate chain using Adobe Reader-level verification.
+     * Verifies the certificate chain using PDF viewer-level verification.
      * Step-by-step verification with clear error messages for non-tech users.
      */
     private void verifyCertificateChain(List<X509Certificate> certChain) throws Exception {
@@ -803,7 +942,7 @@ public class SignatureVerificationService {
 
         // Step 5: Build and validate certificate path to root CA
         try {
-            // Adobe Reader-style verification: Try to find a valid path
+            // PDF viewer-style verification: Try to find a valid path
             CertificateFactory cf = CertificateFactory.getInstance("X.509");
 
             // Create PKIXParameters with trust anchors
@@ -979,37 +1118,37 @@ public class SignatureVerificationService {
 
         // Self-signed certificate
         if (lowerMsg.contains("self-signed")) {
-            return "Certificate is self-signed and not trusted. Add it to Trust Manager to trust it.";
+            return "This certificate is not trusted";
         }
 
         // No trusted root found
         if (lowerMsg.contains("no trusted root") || lowerMsg.contains("trust anchor")) {
-            return "Certificate issuer is not trusted. Add the root certificate to Trust Manager.";
+            return "Certificate issuer is not trusted";
         }
 
         // Certificate chain broken
         if (lowerMsg.contains("chain broken")) {
-            return technicalMessage; // Already user-friendly
+            return "Certificate chain is broken";
         }
 
         // Path validation failed
         if (lowerMsg.contains("path") && lowerMsg.contains("invalid")) {
-            return "Certificate chain is invalid. Intermediate certificates may be missing.";
+            return "Certificate chain is not valid";
         }
 
         // No certificate found
         if (lowerMsg.contains("no certificate found")) {
-            return "No certificate found in signature";
+            return "No certificate found";
         }
 
         // No trusted certificates available
         if (lowerMsg.contains("no trusted certificates available")) {
-            return "No trusted certificates configured. Add root certificates in Trust Manager.";
+            return "No trusted certificates available";
         }
 
         // Generic certificate not trusted
         if (lowerMsg.contains("not trusted")) {
-            return "Certificate is not trusted. Add the issuer certificate to Trust Manager.";
+            return "This certificate is not trusted";
         }
 
         // Default: return original message
@@ -1078,13 +1217,13 @@ public class SignatureVerificationService {
                         return;
                     } catch (SignatureVerificationException ocspEx) {
                         log.warn("OCSP check failed: " + ocspEx.getMessage());
-                        // Adobe Reader style: If revocation check fails, treat as verification failure
+                        // PDF viewer style: If revocation check fails, treat as verification failure
                         if (ocspEx.isNetworkError()) {
                             result.setRevocationStatus("Unknown (Network Error)");
-                            result.addVerificationWarning("Could not verify certificate revocation status due to network error. Signature trust cannot be fully verified.");
+                            result.addVerificationWarning("Could not check if certificate was revoked (network error)");
                         } else {
                             result.setRevocationStatus("Unknown (Check Failed)");
-                            result.addVerificationError("Certificate revocation status could not be verified: " + ocspEx.getUserFriendlyMessage());
+                            result.addVerificationWarning("Could not check if certificate was revoked");
                         }
                         return;
                     }
@@ -1092,12 +1231,12 @@ public class SignatureVerificationService {
             }
 
             result.setRevocationStatus("Not Checked");
-            result.addVerificationWarning("Certificate revocation status could not be verified - no revocation information available");
+            result.addVerificationWarning("Could not check if certificate was revoked");
 
         } catch (Exception e) {
             log.warn("OCSP error: " + e.getMessage());
             result.setRevocationStatus("Unknown");
-            result.addVerificationError("Certificate revocation check failed: " + e.getMessage());
+            result.addVerificationWarning("Could not check if certificate was revoked");
         }
     }
 
@@ -1238,7 +1377,7 @@ public class SignatureVerificationService {
     /**
      * Checks if LTV (Long Term Validation) is enabled for the signature.
      * LTV is enabled if the PDF contains revocation information (CRL/OCSP).
-     * Adobe Reader checks for:
+     * PDF viewers check for:
      * 1. DSS (Document Security Store) dictionary
      * 2. CRLs (Certificate Revocation Lists) embedded
      * 3. OCSP responses embedded
@@ -1308,7 +1447,7 @@ public class SignatureVerificationService {
 
     /**
      * Verifies document integrity based on signature type and certification level.
-     * This implements Adobe Reader-style verification:
+     * This implements PDF viewer-style verification:
      * - Approval signatures: Valid even if not the last revision (multiple signatures expected)
      * - Certification signatures: Check if subsequent changes are allowed by certification level
      *
