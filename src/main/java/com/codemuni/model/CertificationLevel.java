@@ -9,10 +9,10 @@ package com.codemuni.model;
  * - NOT_CERTIFIED: Not a certification signature (approval signature)
  */
 public enum CertificationLevel {
-    NOT_CERTIFIED("Approval Signature", "NOT_CERTIFIED", 0),
-    NO_CHANGES_ALLOWED("Certified - No Changes Allowed", "NO_CHANGES_ALLOWED", 1),
-    FORM_FILLING_CERTIFIED("Certified - Form Filling Allowed", "FORM_FILLING_CERTIFIED", 3),
-    FORM_FILLING_AND_ANNOTATION_CERTIFIED("Certified - Form Filling & Annotations Allowed", "FORM_FILLING_AND_ANNOTATION_CERTIFIED", 2);
+    NOT_CERTIFIED("Open", "NOT_CERTIFIED", 0),
+    NO_CHANGES_ALLOWED("Locked", "NO_CHANGES_ALLOWED", 1),
+    FORM_FILLING_CERTIFIED("Form", "FORM_FILLING_CERTIFIED", 3),
+    FORM_FILLING_AND_ANNOTATION_CERTIFIED("Form+Annot", "FORM_FILLING_AND_ANNOTATION_CERTIFIED", 2);
 
     private final String label;
     private final String id;

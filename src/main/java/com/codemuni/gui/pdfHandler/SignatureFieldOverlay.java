@@ -34,6 +34,7 @@ public class SignatureFieldOverlay extends JPanel {
     private final int pageImageHeight; // Actual rendered page image height
 
     private SignatureFieldInfo hoveredField = null;
+    private SignatureFieldInfo clickedField = null; // Track clicked field for loading state
     private float pulseAlpha = 0.0f;
     private boolean pulseIncreasing = true;
     private Timer pulseTimer;
@@ -41,6 +42,10 @@ public class SignatureFieldOverlay extends JPanel {
     // Dashed border animation
     private float dashPhase = 0.0f;
     private Timer dashAnimationTimer;
+
+    // Loading state
+    private boolean isProcessing = false;
+    private Timer loadingAnimationTimer;
 
     /**
      * Listener interface for signature field click events.
@@ -116,13 +121,33 @@ public class SignatureFieldOverlay extends JPanel {
 
             @Override
             public void mouseClicked(MouseEvent e) {
-                SignatureFieldInfo clickedField = getFieldAtPoint(e.getPoint());
-                if (clickedField != null && clickListener != null) {
-                    // Stop animation before triggering click
+                SignatureFieldInfo field = getFieldAtPoint(e.getPoint());
+                if (field != null && clickListener != null && !isProcessing) {
+                    // Enter loading state
+                    isProcessing = true;
+                    clickedField = field;
+
+                    // Change cursor to wait/loading state
+                    setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
+
+                    // Stop animations
                     if (pulseTimer != null) {
                         pulseTimer.stop();
                     }
-                    clickListener.onFieldClicked(clickedField);
+                    if (dashAnimationTimer != null) {
+                        dashAnimationTimer.stop();
+                    }
+
+                    // Start loading animation
+                    startLoadingAnimation();
+
+                    // Visual feedback: repaint to show loading state
+                    repaint();
+
+                    // Trigger the click listener (this will open signing dialog)
+                    SwingUtilities.invokeLater(() -> {
+                        clickListener.onFieldClicked(field);
+                    });
                 }
             }
 
@@ -186,15 +211,32 @@ public class SignatureFieldOverlay extends JPanel {
     }
 
     /**
+     * Starts the loading animation timer.
+     */
+    private void startLoadingAnimation() {
+        if (loadingAnimationTimer != null && loadingAnimationTimer.isRunning()) {
+            return;
+        }
+        loadingAnimationTimer = new Timer(30, e -> {
+            if (isProcessing) {
+                repaint();
+            } else {
+                ((Timer) e.getSource()).stop();
+            }
+        });
+        loadingAnimationTimer.start();
+    }
+
+    /**
      * Generates tooltip text for a specific signature field.
      */
     private String getFieldTooltip(SignatureFieldInfo field) {
-        return "<html><body style='width: 220px; padding: 6px; font-family: Segoe UI, sans-serif;'>" +
+        return "<html><body style='width: 200px; padding: 6px; font-family: Segoe UI, sans-serif;'>" +
                 "<div style='text-align: center; margin-bottom: 4px;'>" +
-                "<span style='font-size: 12px; font-weight: bold; color: #28A745;'>✍️ Click to Sign</span>" +
+                "<span style='font-size: 12px; font-weight: bold; color: #28A745;'>✍ Click to Sign</span>" +
                 "</div>" +
                 "<div style='font-size: 10px; line-height: 1.4; color: #cccccc;'>" +
-                "Click here to add your digital signature to <b>" + field.getFieldName() + "</b>" +
+                "Sign <b>" + field.getFieldName() + "</b> with your digital certificate" +
                 "</div>" +
                 "</body></html>";
     }
@@ -277,18 +319,31 @@ public class SignatureFieldOverlay extends JPanel {
 
     /**
      * Draws a single signature field with professional, attractive styling.
-     * Enhanced with dashed border animation, subtle glow, and theme colors.
+     * Enhanced with dashed border animation, subtle glow, theme colors, and loading state.
      */
     private void drawSignatureField(Graphics2D g2, SignatureFieldInfo field) {
         Rectangle rect = pdfRectToScreenRect(field);
         boolean isHovered = (field == hoveredField);
+        boolean isClicked = (field == clickedField && isProcessing);
 
-        // Choose colors based on hover state
-        Color borderColor = isHovered ? FIELD_HOVER_BORDER_COLOR : FIELD_BORDER_COLOR;
-        Color fillColor = isHovered ? FIELD_HOVER_FILL_COLOR : FIELD_FILL_COLOR;
+        // Choose colors based on state (clicked > hover > normal)
+        Color borderColor;
+        Color fillColor;
 
-        // Draw outer glow/pulse effect (only when not hovering) - Subtle green glow
-        if (!isHovered && pulseAlpha > 0) {
+        if (isClicked) {
+            // Loading state: use muted colors
+            borderColor = new Color(40, 167, 69, 120);
+            fillColor = new Color(40, 167, 69, 25);
+        } else if (isHovered) {
+            borderColor = FIELD_HOVER_BORDER_COLOR;
+            fillColor = FIELD_HOVER_FILL_COLOR;
+        } else {
+            borderColor = FIELD_BORDER_COLOR;
+            fillColor = FIELD_FILL_COLOR;
+        }
+
+        // Draw outer glow/pulse effect (only when not hovering and not processing)
+        if (!isHovered && !isClicked && pulseAlpha > 0) {
             int pulseAlphaInt = (int) (pulseAlpha * 255);
             Color pulseColor = new Color(40, 167, 69, Math.min(pulseAlphaInt, 120)); // Green pulse
 
@@ -302,12 +357,24 @@ public class SignatureFieldOverlay extends JPanel {
             g2.drawRoundRect(rect.x - 1, rect.y - 1, rect.width + 2, rect.height + 2, 8, 8);
         }
 
+        // Draw loading overlay for clicked field
+        if (isClicked) {
+            // Semi-transparent overlay
+            g2.setColor(new Color(40, 40, 40, 100));
+            g2.fillRoundRect(rect.x, rect.y, rect.width, rect.height, 6, 6);
+        }
+
         // Draw very subtle fill (more transparent)
         g2.setColor(fillColor);
         g2.fillRoundRect(rect.x, rect.y, rect.width, rect.height, 6, 6);
 
-        // Draw dashed border with animation on hover, solid on normal
-        if (isHovered) {
+        // Draw border based on state
+        if (isClicked) {
+            // Solid border for loading state
+            g2.setStroke(new BasicStroke(2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+            g2.setColor(new Color(40, 167, 69, 150));
+            g2.drawRoundRect(rect.x, rect.y, rect.width, rect.height, 6, 6);
+        } else if (isHovered) {
             // Animated dashed border (marching ants effect)
             float[] dashPattern = {8f, 4f};
             g2.setStroke(new BasicStroke(
@@ -339,8 +406,13 @@ public class SignatureFieldOverlay extends JPanel {
         drawCornerMarkers(g2, rect, borderColor, isHovered);
 
         // Draw signature icon and text with enhanced visibility
-        drawFieldIcon(g2, rect, isHovered);
-        drawFieldLabel(g2, rect, field, isHovered);
+        if (!isClicked) {
+            drawFieldIcon(g2, rect, isHovered);
+            drawFieldLabel(g2, rect, field, isHovered);
+        } else {
+            // Show loading indicator for clicked field
+            drawLoadingIndicator(g2, rect);
+        }
     }
 
     /**
@@ -398,15 +470,59 @@ public class SignatureFieldOverlay extends JPanel {
     }
 
     /**
+     * Draws a loading indicator (spinner) for the clicked field.
+     */
+    private void drawLoadingIndicator(Graphics2D g2, Rectangle rect) {
+        int centerX = rect.x + rect.width / 2;
+        int centerY = rect.y + rect.height / 2;
+        int spinnerSize = Math.min(rect.width, rect.height) / 3;
+        spinnerSize = Math.max(24, Math.min(spinnerSize, 48));
+
+        // Draw "Opening..." text
+        String loadingText = "Opening...";
+        g2.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        FontMetrics fm = g2.getFontMetrics();
+        int textWidth = fm.stringWidth(loadingText);
+        int textX = centerX - textWidth / 2;
+        int textY = centerY + spinnerSize / 2 + fm.getHeight();
+
+        // Text shadow
+        g2.setColor(new Color(0, 0, 0, 150));
+        g2.drawString(loadingText, textX + 1, textY + 1);
+
+        // Text
+        g2.setColor(new Color(200, 200, 200));
+        g2.drawString(loadingText, textX, textY);
+
+        // Draw simple animated spinner
+        g2.setStroke(new BasicStroke(3f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+        g2.setColor(new Color(40, 167, 69, 200));
+
+        // Draw a simple rotating arc
+        long time = System.currentTimeMillis();
+        int angle = (int) ((time / 10) % 360);
+        g2.drawArc(centerX - spinnerSize / 2, centerY - spinnerSize / 2,
+                   spinnerSize, spinnerSize, angle, 270);
+    }
+
+    /**
      * Draws an attractive label inside the field with instructions (PDF viewer style).
-     * Enhanced with better typography and visibility.
+     * Enhanced with better typography, visibility, and UX.
      */
     private void drawFieldLabel(Graphics2D g2, Rectangle rect, SignatureFieldInfo field, boolean isHovered) {
-        // Adobe style: Show attractive call-to-action text
-        String labelText = isHovered ? "✍ Click to Sign" : "Sign Here";
+        // Show different text based on hover and field size
+        String labelText;
+        if (isHovered) {
+            labelText = "✍ Click to Sign";
+        } else if (rect.width > 100 && rect.height > 40) {
+            labelText = "Click to Sign";
+        } else {
+            labelText = "Sign";
+        }
 
-        // Use larger, bolder font for better visibility
-        g2.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        // Use adaptive font size based on rectangle dimensions
+        int fontSize = Math.max(12, Math.min(16, Math.min(rect.width / 10, rect.height / 3)));
+        g2.setFont(new Font("Segoe UI Emoji", Font.BOLD, fontSize));
         FontMetrics fm = g2.getFontMetrics();
         int textWidth = fm.stringWidth(labelText);
         int textHeight = fm.getHeight();
@@ -415,30 +531,33 @@ public class SignatureFieldOverlay extends JPanel {
         int textX = rect.x + (rect.width - textWidth) / 2;
         int textY = rect.y + (rect.height + textHeight / 2) / 2;
 
-        // Draw background badge for text (professional look)
-        if (rect.width > 80 && rect.height > 30) {
-            int badgePadding = 8;
+        // Draw background badge for text (professional look) - only for larger fields
+        if (rect.width > 60 && rect.height > 25) {
+            int badgePadding = isHovered ? 10 : 8;
             int badgeWidth = textWidth + badgePadding * 2;
             int badgeHeight = textHeight + 4;
             int badgeX = textX - badgePadding;
             int badgeY = textY - textHeight + 4;
 
-            // Semi-transparent dark background
-            g2.setColor(new Color(40, 40, 40, isHovered ? 240 : 200));
-            g2.fillRoundRect(badgeX, badgeY, badgeWidth, badgeHeight, 6, 6);
+            // Semi-transparent dark background with smooth transition
+            int bgAlpha = isHovered ? 250 : 210;
+            g2.setColor(new Color(35, 35, 35, bgAlpha));
+            g2.fillRoundRect(badgeX, badgeY, badgeWidth, badgeHeight, 8, 8);
 
-            // Subtle border with green theme
-            g2.setColor(new Color(40, 167, 69, isHovered ? 200 : 150));
-            g2.setStroke(new BasicStroke(1.5f));
-            g2.drawRoundRect(badgeX, badgeY, badgeWidth, badgeHeight, 6, 6);
+            // Subtle border with green theme - more prominent on hover
+            int borderAlpha = isHovered ? 220 : 160;
+            g2.setColor(new Color(40, 167, 69, borderAlpha));
+            g2.setStroke(new BasicStroke(isHovered ? 2.0f : 1.5f));
+            g2.drawRoundRect(badgeX, badgeY, badgeWidth, badgeHeight, 8, 8);
         }
 
-        // Draw text shadow for depth
-        g2.setColor(new Color(0, 0, 0, 120));
+        // Draw text shadow for depth and legibility
+        g2.setColor(new Color(0, 0, 0, isHovered ? 150 : 100));
         g2.drawString(labelText, textX + 1, textY + 1);
 
-        // Draw text with attractive color - green on hover
-        g2.setColor(isHovered ? APP_GREEN : new Color(200, 200, 200));
+        // Draw text with attractive color - brighter green on hover
+        Color textColor = isHovered ? new Color(60, 200, 95) : new Color(210, 210, 210);
+        g2.setColor(textColor);
         g2.drawString(labelText, textX, textY);
     }
 
@@ -457,6 +576,28 @@ public class SignatureFieldOverlay extends JPanel {
     }
 
     /**
+     * Resets the loading state (call this when signing dialog is closed/cancelled).
+     * Restores normal interaction state.
+     */
+    public void resetLoadingState() {
+        isProcessing = false;
+        clickedField = null;
+        setCursor(Cursor.getDefaultCursor());
+
+        // Stop loading animation
+        if (loadingAnimationTimer != null && loadingAnimationTimer.isRunning()) {
+            loadingAnimationTimer.stop();
+        }
+
+        // Restart animations
+        if (pulseTimer != null && !pulseTimer.isRunning()) {
+            pulseTimer.start();
+        }
+
+        repaint();
+    }
+
+    /**
      * Cleanup method to properly stop timers and release resources.
      * Should be called when the overlay is no longer needed to prevent memory leaks.
      */
@@ -468,6 +609,10 @@ public class SignatureFieldOverlay extends JPanel {
         if (dashAnimationTimer != null) {
             dashAnimationTimer.stop();
             dashAnimationTimer = null;
+        }
+        if (loadingAnimationTimer != null) {
+            loadingAnimationTimer.stop();
+            loadingAnimationTimer = null;
         }
     }
 }
