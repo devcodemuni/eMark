@@ -5,7 +5,9 @@ import com.codemuni.core.exception.KeyStoreInitializationException;
 import com.codemuni.core.exception.PrivateKeyAccessException;
 import com.codemuni.core.exception.UserCancelledPasswordEntryException;
 import com.codemuni.core.model.KeystoreAndCertificateInfo;
+import com.codemuni.gui.DialogUtils;
 import com.codemuni.gui.PasswordDialog;
+import com.codemuni.gui.pdfHandler.PdfViewerMain;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
@@ -16,6 +18,7 @@ import java.security.*;
 import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Enumeration;
 import java.util.List;
 
@@ -68,7 +71,8 @@ public class PKCS12KeyStoreProvider implements KeyStoreProvider {
 
         try {
             Security.addProvider(provider);
-            keyStore = KeyStore.getInstance("PKCS12", provider);
+            keyStore = KeyStore.getInstance("PKCS12");
+            System.out.println("Loading PFX file: " + pfxFilePath);
 
             if (cachedPassword == null) {
                 cachedPassword = promptPasswordWithRetry();
@@ -86,6 +90,7 @@ public class PKCS12KeyStoreProvider implements KeyStoreProvider {
                 throw (UserCancelledPasswordEntryException) e;
             }
 
+            log.error("Failed to load PKCS12 keystore", e);
             throw new KeyStoreInitializationException("Failed to load PKCS12 keystore", e);
         }
     }
@@ -107,6 +112,7 @@ public class PKCS12KeyStoreProvider implements KeyStoreProvider {
             }
 
             if (attempt == MAX_PIN_ATTEMPTS) {
+                DialogUtils.showError(PdfViewerMain.INSTANCE, "Access Denied", "Maximum password attempts reached. Signer operation cancelled.");
                 throw new UserCancelledPasswordEntryException("Maximum password attempts exceeded. Aborting operation.");
             }
         }
@@ -118,7 +124,7 @@ public class PKCS12KeyStoreProvider implements KeyStoreProvider {
      */
     private char[] showPasswordPrompt(String message, boolean showError) throws UserCancelledPasswordEntryException {
         PasswordDialog dialog = new PasswordDialog(
-                null,
+                PdfViewerMain.INSTANCE,
                 "Authentication Required",
                 message,
                 "Enter password",
@@ -130,7 +136,7 @@ public class PKCS12KeyStoreProvider implements KeyStoreProvider {
         dialog.setValidator(value -> !value.trim().isEmpty());
 
         if (showError) {
-            dialog.showInvalidMessage("Invalid password — please try again.");
+            dialog.showInvalidMessage(message);
         }
 
         dialog.setVisible(true); // Blocks until closed
@@ -139,15 +145,20 @@ public class PKCS12KeyStoreProvider implements KeyStoreProvider {
             throw new UserCancelledPasswordEntryException("User cancelled password input.");
         }
 
+        System.out.println("============ Password is ==========");
+        System.out.println("Password is - " + dialog.getValue());
+
         return dialog.getValue().toCharArray();
     }
 
     private boolean validatePassword(String pfxPath, char[] password) {
         try (FileInputStream fis = new FileInputStream(pfxPath)) {
-            KeyStore tempKs = KeyStore.getInstance("PKCS12", provider);
+            KeyStore tempKs = KeyStore.getInstance("PKCS12");
             tempKs.load(fis, password);
             return true; // password works
         } catch (Exception e) {
+            log.error("Failed to validate password" + e.getMessage(), e);
+            this.cachedPassword = null; // clear cached password on failure
             return false; // wrong password
         }
     }

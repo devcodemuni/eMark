@@ -16,6 +16,7 @@ import java.security.cert.X509Certificate;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.prefs.Preferences;
 
 import static com.codemuni.utils.AppConstants.APP_NAME;
 
@@ -29,6 +30,9 @@ public class CertificateListDialog extends JDialog {
 
     private final List<KeystoreAndCertificateInfo> certificateList;
     private final List<JPanel> cardList = new ArrayList<>();
+
+    private static final Preferences prefs = Preferences.userNodeForPackage(CertificateListDialog.class);
+    private static final String LAST_DIR_KEY = "lastPdfDir";
 
     private JButton browseButton;
     private File selectedPfxFile = null;
@@ -181,8 +185,18 @@ public class CertificateListDialog extends JDialog {
         if (selectedPfxFile == null) {
             JFileChooser fileChooser = getJFileChooser();
 
+            String lastDir = prefs.get(LAST_DIR_KEY, null);
+            if (lastDir != null) {
+                fileChooser.setCurrentDirectory(new File(lastDir));
+            }
+
             int result = fileChooser.showOpenDialog(this);
             if (result == JFileChooser.APPROVE_OPTION) {
+
+                File parentDir = fileChooser.getSelectedFile().getParentFile();
+                if (parentDir != null) {
+                    prefs.put(LAST_DIR_KEY, parentDir.getAbsolutePath());
+                }
 
                 // Check if the selected file is a PFX file
                 String fileName = fileChooser.getSelectedFile().getName();
@@ -251,7 +265,6 @@ public class CertificateListDialog extends JDialog {
                 new EmptyBorder(10, 15, 10, 15)));
 
         putCardProperties(card, info, cert);
-
         JLabel iconLabel = new JLabel(Utils.loadScaledIcon(getIconPath(info.getKeystoreName()), 32));
         iconLabel.setToolTipText("Click to select. Double-click to view details.");
 

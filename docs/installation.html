@@ -1,0 +1,1856 @@
+<!doctype html>
+<html lang="en" class="scroll-smooth">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+        <!-- Primary Meta Tags -->
+        <title>
+            Installation Guide - eMark PDF Signer | Step-by-Step Setup
+            Instructions
+        </title>
+        <meta
+            name="description"
+            content="Complete installation guide for eMark PDF Signer. Step-by-step instructions for Windows, Linux, and macOS. Learn how to install Java, configure USB tokens, HSM devices, and start signing PDFs."
+        />
+
+        <!-- Favicons -->
+        <link rel="icon" href="images/favicon.ico" type="image/x-icon" />
+        <link rel="apple-touch-icon" sizes="180x180" href="images/logo.png" />
+
+        <!-- Fonts & Styles -->
+        <link
+            href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap"
+            rel="stylesheet"
+        />
+        <script src="https://cdn.tailwindcss.com"></script>
+        <link
+            rel="stylesheet"
+            href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+        />
+
+        <!-- Tailwind Config -->
+        <script>
+            tailwind.config = {
+                darkMode: "class",
+                theme: {
+                    extend: {
+                        colors: {
+                            primary: {
+                                50: "#f0f9ff",
+                                500: "#0ea5e9",
+                                600: "#0284c7",
+                                700: "#0369a1",
+                            },
+                        },
+                    },
+                },
+            };
+        </script>
+
+        <style>
+            :root {
+                --gradient-primary: linear-gradient(
+                    135deg,
+                    #667eea 0%,
+                    #764ba2 100%
+                );
+            }
+
+            * {
+                font-family:
+                    "Inter",
+                    -apple-system,
+                    BlinkMacSystemFont,
+                    sans-serif;
+            }
+
+            body {
+                background: #0a0a0a;
+                color: #e5e7eb;
+            }
+
+            .gradient-text {
+                background: linear-gradient(
+                    135deg,
+                    #667eea 0%,
+                    #764ba2 50%,
+                    #f093fb 100%
+                );
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+                background-clip: text;
+            }
+
+            .glass {
+                background: rgba(17, 24, 39, 0.7);
+                backdrop-filter: blur(16px);
+                -webkit-backdrop-filter: blur(16px);
+                border: 1px solid rgba(75, 85, 99, 0.3);
+            }
+
+            .card-hover {
+                transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            }
+
+            .card-hover:hover {
+                transform: translateY(-4px);
+                box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+            }
+
+            ::-webkit-scrollbar {
+                width: 10px;
+            }
+
+            ::-webkit-scrollbar-track {
+                background: #1a1a1a;
+            }
+
+            ::-webkit-scrollbar-thumb {
+                background: linear-gradient(180deg, #667eea, #764ba2);
+                border-radius: 5px;
+            }
+
+            .code-block {
+                background: #1a1a1a;
+                border: 1px solid #374151;
+                border-radius: 8px;
+                padding: 16px;
+                overflow-x: auto;
+                font-family: "Courier New", monospace;
+                font-size: 14px;
+            }
+
+            .step-number {
+                width: 48px;
+                height: 48px;
+                border-radius: 12px;
+                background: linear-gradient(135deg, #667eea, #764ba2);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-weight: bold;
+                font-size: 20px;
+                flex-shrink: 0;
+            }
+
+            .nav-link {
+                position: relative;
+            }
+
+            .nav-link.active {
+                color: #a78bfa;
+            }
+
+            .nav-link.active::before {
+                content: "";
+                position: absolute;
+                left: 0;
+                top: 0;
+                bottom: 0;
+                width: 3px;
+                background: linear-gradient(180deg, #667eea, #764ba2);
+                border-radius: 0 3px 3px 0;
+            }
+
+            .warning-box {
+                background: rgba(245, 158, 11, 0.1);
+                border-left: 4px solid #f59e0b;
+                padding: 16px;
+                border-radius: 8px;
+                margin: 16px 0;
+            }
+
+            .info-box {
+                background: rgba(59, 130, 246, 0.1);
+                border-left: 4px solid #3b82f6;
+                padding: 16px;
+                border-radius: 8px;
+                margin: 16px 0;
+            }
+
+            .success-box {
+                background: rgba(34, 197, 94, 0.1);
+                border-left: 4px solid #22c55e;
+                padding: 16px;
+                border-radius: 8px;
+                margin: 16px 0;
+            }
+
+            .tab-button {
+                padding: 12px 24px;
+                background: rgba(75, 85, 99, 0.3);
+                border: 1px solid rgba(75, 85, 99, 0.5);
+                border-radius: 8px 8px 0 0;
+                cursor: pointer;
+                transition: all 0.3s;
+            }
+
+            .tab-button.active {
+                background: rgba(102, 126, 234, 0.2);
+                border-color: #667eea;
+                color: #a78bfa;
+            }
+
+            .tab-content {
+                display: none;
+            }
+
+            .tab-content.active {
+                display: block;
+            }
+        </style>
+    </head>
+
+    <body class="dark">
+        <!-- Header -->
+        <header class="sticky top-0 z-50 glass">
+            <nav class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+                <div class="flex items-center justify-between">
+                    <!-- Logo -->
+                    <div class="flex items-center space-x-3">
+                        <div
+                            class="w-11 h-11 rounded-xl bg-gradient-to-br from-purple-600 to-indigo-600 flex items-center justify-center shadow-lg"
+                        >
+                            <img
+                                src="images/logo.png"
+                                alt="eMark Logo"
+                                class="w-full h-full object-contain"
+                            />
+                        </div>
+                        <div>
+                            <h1 class="text-xl font-bold gradient-text">
+                                eMark
+                            </h1>
+                            <p class="text-xs text-gray-400">
+                                Installation Guide
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Navigation -->
+                    <div class="flex items-center space-x-4">
+                        <a
+                            href="index.html"
+                            class="text-gray-300 hover:text-white transition-colors font-medium"
+                        >
+                            <i class="fas fa-home mr-2"></i>Home
+                        </a>
+                        <a
+                            href="https://github.com/devcodemuni/eMark"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="px-4 py-2 glass rounded-lg hover:bg-gray-800 transition-all"
+                        >
+                            <i class="fab fa-github mr-2"></i>GitHub
+                        </a>
+                    </div>
+                </div>
+            </nav>
+        </header>
+
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+            <div class="grid lg:grid-cols-4 gap-8">
+                <!-- Sidebar Navigation -->
+                <div class="lg:col-span-1">
+                    <div class="glass rounded-2xl p-6 sticky top-24">
+                        <h3 class="font-bold text-lg mb-4 text-white">
+                            Contents
+                        </h3>
+                        <nav class="space-y-2">
+                            <a
+                                href="#prerequisites"
+                                class="nav-link block py-2 px-3 text-sm text-gray-300 hover:text-white transition-colors rounded-lg"
+                            >
+                                Prerequisites
+                            </a>
+                            <a
+                                href="#windows"
+                                class="nav-link block py-2 px-3 text-sm text-gray-300 hover:text-white transition-colors rounded-lg"
+                            >
+                                Windows Installation
+                            </a>
+                            <a
+                                href="#linux"
+                                class="nav-link block py-2 px-3 text-sm text-gray-300 hover:text-white transition-colors rounded-lg"
+                            >
+                                Linux Installation
+                            </a>
+                            <a
+                                href="#macos"
+                                class="nav-link block py-2 px-3 text-sm text-gray-300 hover:text-white transition-colors rounded-lg"
+                            >
+                                macOS Installation
+                            </a>
+                            <a
+                                href="#java-setup"
+                                class="nav-link block py-2 px-3 text-sm text-gray-300 hover:text-white transition-colors rounded-lg"
+                            >
+                                Java Setup
+                            </a>
+                            <a
+                                href="#certificate-setup"
+                                class="nav-link block py-2 px-3 text-sm text-gray-300 hover:text-white transition-colors rounded-lg"
+                            >
+                                Certificate Setup
+                            </a>
+                            <a
+                                href="#first-run"
+                                class="nav-link block py-2 px-3 text-sm text-gray-300 hover:text-white transition-colors rounded-lg"
+                            >
+                                First Run
+                            </a>
+                            <a
+                                href="#troubleshooting"
+                                class="nav-link block py-2 px-3 text-sm text-gray-300 hover:text-white transition-colors rounded-lg"
+                            >
+                                Troubleshooting
+                            </a>
+                        </nav>
+                    </div>
+                </div>
+
+                <!-- Main Content -->
+                <div class="lg:col-span-3">
+                    <!-- Hero -->
+                    <div class="mb-12">
+                        <h1 class="text-5xl font-extrabold mb-4">
+                            <span class="gradient-text"
+                                >Installation Guide</span
+                            >
+                        </h1>
+                        <p class="text-xl text-gray-300 leading-relaxed">
+                            Complete step-by-step instructions to install and
+                            configure eMark PDF Signer on your system. Follow
+                            the guide for your operating system below.
+                        </p>
+                    </div>
+
+                    <!-- Prerequisites Section -->
+                    <section id="prerequisites" class="mb-16">
+                        <div class="glass rounded-2xl p-8">
+                            <div class="flex items-center space-x-4 mb-6">
+                                <div
+                                    class="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-600 to-indigo-600 flex items-center justify-center"
+                                >
+                                    <i
+                                        class="fas fa-clipboard-check text-2xl"
+                                    ></i>
+                                </div>
+                                <h2 class="text-3xl font-bold text-white">
+                                    Prerequisites
+                                </h2>
+                            </div>
+
+                            <div class="space-y-6">
+                                <div class="warning-box">
+                                    <div class="flex items-start space-x-3">
+                                        <i
+                                            class="fas fa-exclamation-triangle text-yellow-500 text-xl mt-1"
+                                        ></i>
+                                        <div>
+                                            <p
+                                                class="font-semibold text-yellow-500 mb-2"
+                                            >
+                                                Important: Java 8 Required
+                                            </p>
+                                            <p class="text-gray-300">
+                                                eMark requires
+                                                <strong
+                                                    >Java SE 8 (JDK or JRE
+                                                    1.8.x)</strong
+                                                >
+                                                specifically. It is NOT
+                                                compatible with Java 7 or Java
+                                                9+. Make sure to install Java 8
+                                                before proceeding.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="space-y-4">
+                                    <div class="flex items-start space-x-4">
+                                        <i
+                                            class="fas fa-check-circle text-green-400 text-xl mt-1"
+                                        ></i>
+                                        <div>
+                                            <h4
+                                                class="font-semibold text-white mb-2"
+                                            >
+                                                Required
+                                            </h4>
+                                            <ul
+                                                class="list-disc list-inside text-gray-300 space-y-1"
+                                            >
+                                                <li>
+                                                    Java SE 8 (JDK or JRE) -
+                                                    Version 1.8.x
+                                                </li>
+                                                <li>
+                                                    64-bit Operating System
+                                                    (recommended)
+                                                </li>
+                                                <li>
+                                                    Minimum 2 GB RAM (4 GB
+                                                    recommended)
+                                                </li>
+                                                <li>100 MB free disk space</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+
+                                    <div class="flex items-start space-x-4">
+                                        <i
+                                            class="fas fa-certificate text-blue-400 text-xl mt-1"
+                                        ></i>
+                                        <div>
+                                            <h4
+                                                class="font-semibold text-white mb-2"
+                                            >
+                                                For PDF Signing (one of the
+                                                following)
+                                            </h4>
+                                            <ul
+                                                class="list-disc list-inside text-gray-300 space-y-1"
+                                            >
+                                                <li>
+                                                    USB Token (eToken, SafeNet,
+                                                    Gemalto, etc.)
+                                                </li>
+                                                <li>
+                                                    Hardware Security Module
+                                                    (HSM) with PKCS#11 support
+                                                </li>
+                                                <li>
+                                                    Smart Card with certificate
+                                                </li>
+                                                <li>
+                                                    PKCS#12/PFX certificate file
+                                                </li>
+                                                <li>
+                                                    Windows Certificate Store
+                                                    (Windows only)
+                                                </li>
+                                            </ul>
+                                        </div>
+                                    </div>
+
+                                    <div class="flex items-start space-x-4">
+                                        <i
+                                            class="fas fa-desktop text-purple-400 text-xl mt-1"
+                                        ></i>
+                                        <div>
+                                            <h4
+                                                class="font-semibold text-white mb-2"
+                                            >
+                                                Supported Operating Systems
+                                            </h4>
+                                            <ul
+                                                class="list-disc list-inside text-gray-300 space-y-1"
+                                            >
+                                                <li>
+                                                    Windows 7, 10, 11 (64-bit
+                                                    recommended)
+                                                </li>
+                                                <li>
+                                                    Linux: Ubuntu 18.04+, Debian
+                                                    10+, Fedora, other
+                                                    distributions
+                                                </li>
+                                                <li>macOS (via JAR file)</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Windows Installation -->
+                    <section id="windows" class="mb-16">
+                        <div class="glass rounded-2xl p-8">
+                            <div class="flex items-center space-x-4 mb-6">
+                                <div
+                                    class="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center"
+                                >
+                                    <i
+                                        class="fab fa-windows text-2xl text-blue-400"
+                                    ></i>
+                                </div>
+                                <h2 class="text-3xl font-bold text-white">
+                                    Windows Installation
+                                </h2>
+                            </div>
+
+                            <div class="space-y-6">
+                                <!-- Step 1 -->
+                                <div class="flex items-start space-x-4">
+                                    <div class="step-number">1</div>
+                                    <div class="flex-1">
+                                        <h3
+                                            class="text-xl font-bold text-white mb-3"
+                                        >
+                                            Download eMark for Windows
+                                        </h3>
+                                        <p class="text-gray-300 mb-4">
+                                            Visit the GitHub releases page and
+                                            download the latest
+                                            <code
+                                                class="px-2 py-1 bg-gray-800 rounded"
+                                                >.exe</code
+                                            >
+                                            installer for Windows.
+                                        </p>
+                                        <a
+                                            href="https://github.com/devcodemuni/eMark/releases/latest"
+                                            target="_blank"
+                                            class="inline-flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 rounded-lg font-semibold hover:from-purple-700 hover:to-indigo-700 transition-all shadow-lg"
+                                        >
+                                            <i class="fas fa-download"></i>
+                                            <span>Download .exe Installer</span>
+                                        </a>
+                                    </div>
+                                </div>
+
+                                <!-- Step 2 -->
+                                <div class="flex items-start space-x-4">
+                                    <div class="step-number">2</div>
+                                    <div class="flex-1">
+                                        <h3
+                                            class="text-xl font-bold text-white mb-3"
+                                        >
+                                            Install Java 8
+                                        </h3>
+                                        <p class="text-gray-300 mb-4">
+                                            If you don't have Java 8 installed,
+                                            download and install it first:
+                                        </p>
+
+                                        <div class="space-y-3">
+                                            <div class="glass rounded-lg p-4">
+                                                <h4
+                                                    class="font-semibold text-white mb-2"
+                                                >
+                                                    Option 1: Oracle Java 8
+                                                </h4>
+                                                <p
+                                                    class="text-sm text-gray-400 mb-2"
+                                                >
+                                                    Download from Oracle website
+                                                    (requires account):
+                                                </p>
+                                                <a
+                                                    href="https://www.oracle.com/java/technologies/javase/javase8-archive-downloads.html"
+                                                    target="_blank"
+                                                    class="text-purple-400 hover:underline text-sm"
+                                                >
+                                                    https://www.oracle.com/java/technologies/javase/javase8-archive-downloads.html
+                                                </a>
+                                            </div>
+
+                                            <div class="glass rounded-lg p-4">
+                                                <h4
+                                                    class="font-semibold text-white mb-2"
+                                                >
+                                                    Option 2: Amazon Corretto 8
+                                                    (Recommended)
+                                                </h4>
+                                                <p
+                                                    class="text-sm text-gray-400 mb-2"
+                                                >
+                                                    Free, production-ready
+                                                    distribution:
+                                                </p>
+                                                <a
+                                                    href="https://corretto.aws/downloads/latest/amazon-corretto-8-x64-windows-jdk.msi"
+                                                    target="_blank"
+                                                    class="text-purple-400 hover:underline text-sm"
+                                                >
+                                                    Download Corretto 8 MSI
+                                                    Installer
+                                                </a>
+                                            </div>
+
+                                            <div class="glass rounded-lg p-4">
+                                                <h4
+                                                    class="font-semibold text-white mb-2"
+                                                >
+                                                    Option 3: Adoptium (Eclipse
+                                                    Temurin)
+                                                </h4>
+                                                <p
+                                                    class="text-sm text-gray-400 mb-2"
+                                                >
+                                                    Open-source Java
+                                                    distribution:
+                                                </p>
+                                                <a
+                                                    href="https://adoptium.net/temurin/releases/?version=8"
+                                                    target="_blank"
+                                                    class="text-purple-400 hover:underline text-sm"
+                                                >
+                                                    https://adoptium.net/temurin/releases/?version=8
+                                                </a>
+                                            </div>
+                                        </div>
+
+                                        <div class="info-box mt-4">
+                                            <p class="text-sm">
+                                                <strong
+                                                    >Verify
+                                                    Installation:</strong
+                                                >
+                                                Open Command Prompt and run:
+                                            </p>
+                                            <div
+                                                class="code-block mt-2 text-gray-300"
+                                            >
+                                                java -version
+                                            </div>
+                                            <p
+                                                class="text-sm mt-2 text-gray-400"
+                                            >
+                                                Expected output:
+                                                <code
+                                                    >java version
+                                                    "1.8.0_xxx"</code
+                                                >
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Step 3 -->
+                                <div class="flex items-start space-x-4">
+                                    <div class="step-number">3</div>
+                                    <div class="flex-1">
+                                        <h3
+                                            class="text-xl font-bold text-white mb-3"
+                                        >
+                                            Run the Installer
+                                        </h3>
+                                        <p class="text-gray-300 mb-4">
+                                            Double-click the downloaded
+                                            <code
+                                                class="px-2 py-1 bg-gray-800 rounded"
+                                                >eMark-setup.exe</code
+                                            >
+                                            file and follow the installation
+                                            wizard.
+                                        </p>
+
+                                        <div class="space-y-2 text-gray-300">
+                                            <p>
+                                                • Accept the license agreement
+                                            </p>
+                                            <p>
+                                                • Choose installation directory
+                                                (default:
+                                                <code
+                                                    class="px-2 py-1 bg-gray-800 rounded text-sm"
+                                                    >C:\Program
+                                                    Files\eMark</code
+                                                >)
+                                            </p>
+                                            <p>
+                                                • Select whether to create
+                                                desktop shortcut
+                                            </p>
+                                            <p>
+                                                • Click Install and wait for
+                                                completion
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Step 4 -->
+                                <div class="flex items-start space-x-4">
+                                    <div class="step-number">4</div>
+                                    <div class="flex-1">
+                                        <h3
+                                            class="text-xl font-bold text-white mb-3"
+                                        >
+                                            Launch eMark
+                                        </h3>
+                                        <p class="text-gray-300 mb-4">
+                                            After installation completes, launch
+                                            eMark from:
+                                        </p>
+                                        <ul
+                                            class="list-disc list-inside text-gray-300 space-y-2"
+                                        >
+                                            <li>Start Menu → eMark</li>
+                                            <li>
+                                                Desktop shortcut (if created)
+                                            </li>
+                                            <li>
+                                                Installation directory:
+                                                <code
+                                                    class="px-2 py-1 bg-gray-800 rounded text-sm"
+                                                    >eMark.exe</code
+                                                >
+                                            </li>
+                                        </ul>
+                                    </div>
+                                </div>
+
+                                <div class="success-box">
+                                    <div class="flex items-center space-x-3">
+                                        <i
+                                            class="fas fa-check-circle text-green-400 text-xl"
+                                        ></i>
+                                        <p class="font-semibold text-green-400">
+                                            Windows installation complete! Skip
+                                            to
+                                            <a
+                                                href="#certificate-setup"
+                                                class="underline"
+                                                >Certificate Setup</a
+                                            >
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Linux Installation -->
+                    <section id="linux" class="mb-16">
+                        <div class="glass rounded-2xl p-8">
+                            <div class="flex items-center space-x-4 mb-6">
+                                <div
+                                    class="w-12 h-12 rounded-xl bg-orange-500/20 flex items-center justify-center"
+                                >
+                                    <i
+                                        class="fab fa-linux text-2xl text-orange-400"
+                                    ></i>
+                                </div>
+                                <h2 class="text-3xl font-bold text-white">
+                                    Linux Installation
+                                </h2>
+                            </div>
+
+                            <!-- Platform Tabs -->
+                            <div class="flex space-x-2 mb-6">
+                                <button
+                                    class="tab-button active"
+                                    onclick="switchTab('debian')"
+                                >
+                                    <i class="fab fa-ubuntu mr-2"></i
+                                    >Ubuntu/Debian
+                                </button>
+                                <button
+                                    class="tab-button"
+                                    onclick="switchTab('fedora')"
+                                >
+                                    <i class="fab fa-fedora mr-2"></i
+                                    >Fedora/RHEL
+                                </button>
+                                <button
+                                    class="tab-button"
+                                    onclick="switchTab('generic')"
+                                >
+                                    <i class="fas fa-terminal mr-2"></i>Generic
+                                    Linux
+                                </button>
+                            </div>
+
+                            <!-- Debian/Ubuntu Tab -->
+                            <div
+                                id="debian-tab"
+                                class="tab-content active space-y-6"
+                            >
+                                <!-- Step 1 -->
+                                <div class="flex items-start space-x-4">
+                                    <div class="step-number">1</div>
+                                    <div class="flex-1">
+                                        <h3
+                                            class="text-xl font-bold text-white mb-3"
+                                        >
+                                            Install Java 8
+                                        </h3>
+                                        <p class="text-gray-300 mb-4">
+                                            Install OpenJDK 8 using apt:
+                                        </p>
+                                        <div class="code-block text-gray-300">
+                                            sudo apt update<br />
+                                            sudo apt install openjdk-8-jre
+                                        </div>
+                                        <p class="text-sm text-gray-400 mt-2">
+                                            Verify installation:
+                                        </p>
+                                        <div
+                                            class="code-block text-gray-300 mt-2"
+                                        >
+                                            java -version
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Step 2 -->
+                                <div class="flex items-start space-x-4">
+                                    <div class="step-number">2</div>
+                                    <div class="flex-1">
+                                        <h3
+                                            class="text-xl font-bold text-white mb-3"
+                                        >
+                                            Download eMark .deb Package
+                                        </h3>
+                                        <p class="text-gray-300 mb-4">
+                                            Download the latest .deb package:
+                                        </p>
+                                        <div class="code-block text-gray-300">
+                                            wget
+                                            https://github.com/devcodemuni/eMark/releases/latest/download/eMark.deb
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Step 3 -->
+                                <div class="flex items-start space-x-4">
+                                    <div class="step-number">3</div>
+                                    <div class="flex-1">
+                                        <h3
+                                            class="text-xl font-bold text-white mb-3"
+                                        >
+                                            Install eMark
+                                        </h3>
+                                        <p class="text-gray-300 mb-4">
+                                            Install the .deb package:
+                                        </p>
+                                        <div class="code-block text-gray-300">
+                                            sudo dpkg -i eMark.deb<br />
+                                            sudo apt-get install -f
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Step 4 -->
+                                <div class="flex items-start space-x-4">
+                                    <div class="step-number">4</div>
+                                    <div class="flex-1">
+                                        <h3
+                                            class="text-xl font-bold text-white mb-3"
+                                        >
+                                            Launch eMark
+                                        </h3>
+                                        <p class="text-gray-300 mb-4">
+                                            Run from terminal or application
+                                            menu:
+                                        </p>
+                                        <div class="code-block text-gray-300">
+                                            emark
+                                        </div>
+                                        <p class="text-sm text-gray-400 mt-2">
+                                            Or search for "eMark" in your
+                                            application launcher.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Fedora/RHEL Tab -->
+                            <div id="fedora-tab" class="tab-content space-y-6">
+                                <!-- Step 1 -->
+                                <div class="flex items-start space-x-4">
+                                    <div class="step-number">1</div>
+                                    <div class="flex-1">
+                                        <h3
+                                            class="text-xl font-bold text-white mb-3"
+                                        >
+                                            Install Java 8
+                                        </h3>
+                                        <p class="text-gray-300 mb-4">
+                                            Install OpenJDK 8 using dnf:
+                                        </p>
+                                        <div class="code-block text-gray-300">
+                                            sudo dnf install java-1.8.0-openjdk
+                                        </div>
+                                        <p class="text-sm text-gray-400 mt-2">
+                                            Verify installation:
+                                        </p>
+                                        <div
+                                            class="code-block text-gray-300 mt-2"
+                                        >
+                                            java -version
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Step 2 -->
+                                <div class="flex items-start space-x-4">
+                                    <div class="step-number">2</div>
+                                    <div class="flex-1">
+                                        <h3
+                                            class="text-xl font-bold text-white mb-3"
+                                        >
+                                            Download & Install JAR
+                                        </h3>
+                                        <p class="text-gray-300 mb-4">
+                                            Download the universal JAR file:
+                                        </p>
+                                        <div class="code-block text-gray-300">
+                                            wget
+                                            https://github.com/devcodemuni/eMark/releases/latest/download/eMark.jar<br />
+                                            sudo mkdir -p /opt/emark<br />
+                                            sudo mv eMark.jar /opt/emark/<br />
+                                            sudo chmod +x /opt/emark/eMark.jar
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Step 3 -->
+                                <div class="flex items-start space-x-4">
+                                    <div class="step-number">3</div>
+                                    <div class="flex-1">
+                                        <h3
+                                            class="text-xl font-bold text-white mb-3"
+                                        >
+                                            Create Desktop Entry (Optional)
+                                        </h3>
+                                        <p class="text-gray-300 mb-4">
+                                            Create a .desktop file for easy
+                                            access:
+                                        </p>
+                                        <div class="code-block text-gray-300">
+                                            sudo nano
+                                            /usr/share/applications/emark.desktop
+                                        </div>
+                                        <p class="text-sm text-gray-400 mt-2">
+                                            Add the following content:
+                                        </p>
+                                        <div
+                                            class="code-block text-gray-300 mt-2 text-xs"
+                                        >
+                                            [Desktop Entry]<br />
+                                            Name=eMark<br />
+                                            Comment=PDF Signing Software<br />
+                                            Exec=java -jar
+                                            /opt/emark/eMark.jar<br />
+                                            Icon=/opt/emark/logo.png<br />
+                                            Terminal=false<br />
+                                            Type=Application<br />
+                                            Categories=Office;
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Step 4 -->
+                                <div class="flex items-start space-x-4">
+                                    <div class="step-number">4</div>
+                                    <div class="flex-1">
+                                        <h3
+                                            class="text-xl font-bold text-white mb-3"
+                                        >
+                                            Launch eMark
+                                        </h3>
+                                        <div class="code-block text-gray-300">
+                                            java -jar /opt/emark/eMark.jar
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Generic Linux Tab -->
+                            <div id="generic-tab" class="tab-content space-y-6">
+                                <div class="info-box">
+                                    <p class="text-gray-300">
+                                        For other Linux distributions, use the
+                                        universal JAR file which works on any
+                                        Linux system with Java 8.
+                                    </p>
+                                </div>
+
+                                <div class="flex items-start space-x-4">
+                                    <div class="step-number">1</div>
+                                    <div class="flex-1">
+                                        <h3
+                                            class="text-xl font-bold text-white mb-3"
+                                        >
+                                            Install Java 8
+                                        </h3>
+                                        <p class="text-gray-300 mb-4">
+                                            Use your distribution's package
+                                            manager to install Java 8. Examples:
+                                        </p>
+                                        <div
+                                            class="code-block text-gray-300 text-sm"
+                                        >
+                                            # Arch Linux<br />
+                                            sudo pacman -S jre8-openjdk<br /><br />
+                                            # openSUSE<br />
+                                            sudo zypper install
+                                            java-1_8_0-openjdk<br /><br />
+                                            # Gentoo<br />
+                                            sudo emerge -av virtual/jre:1.8
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="flex items-start space-x-4">
+                                    <div class="step-number">2</div>
+                                    <div class="flex-1">
+                                        <h3
+                                            class="text-xl font-bold text-white mb-3"
+                                        >
+                                            Download and Run JAR
+                                        </h3>
+                                        <p class="text-gray-300 mb-4">
+                                            Download the universal JAR file:
+                                        </p>
+                                        <div class="code-block text-gray-300">
+                                            wget
+                                            https://github.com/devcodemuni/eMark/releases/latest/download/eMark.jar<br />
+                                            java -jar eMark.jar
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- macOS Installation -->
+                    <section id="macos" class="mb-16">
+                        <div class="glass rounded-2xl p-8">
+                            <div class="flex items-center space-x-4 mb-6">
+                                <div
+                                    class="w-12 h-12 rounded-xl bg-gray-500/20 flex items-center justify-center"
+                                >
+                                    <i
+                                        class="fab fa-apple text-2xl text-gray-400"
+                                    ></i>
+                                </div>
+                                <h2 class="text-3xl font-bold text-white">
+                                    macOS Installation
+                                </h2>
+                            </div>
+
+                            <div class="space-y-6">
+                                <div class="info-box">
+                                    <p class="text-gray-300">
+                                        eMark runs on macOS using the universal
+                                        JAR file. Follow these steps to set it
+                                        up.
+                                    </p>
+                                </div>
+
+                                <!-- Step 1 -->
+                                <div class="flex items-start space-x-4">
+                                    <div class="step-number">1</div>
+                                    <div class="flex-1">
+                                        <h3
+                                            class="text-xl font-bold text-white mb-3"
+                                        >
+                                            Install Java 8
+                                        </h3>
+                                        <p class="text-gray-300 mb-4">
+                                            Install Java 8 using Homebrew
+                                            (recommended):
+                                        </p>
+                                        <div class="code-block text-gray-300">
+                                            # Install Homebrew if not already
+                                            installed<br />
+                                            /bin/bash -c "$(curl -fsSL
+                                            https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"<br /><br />
+                                            # Install Java 8<br />
+                                            brew install --cask adoptopenjdk8
+                                        </div>
+                                        <p class="text-sm text-gray-400 mt-4">
+                                            Alternative: Download from
+                                            <a
+                                                href="https://adoptium.net/temurin/releases/?version=8"
+                                                target="_blank"
+                                                class="text-purple-400 hover:underline"
+                                                >Adoptium</a
+                                            >
+                                        </p>
+                                        <div
+                                            class="code-block text-gray-300 mt-4"
+                                        >
+                                            java -version
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Step 2 -->
+                                <div class="flex items-start space-x-4">
+                                    <div class="step-number">2</div>
+                                    <div class="flex-1">
+                                        <h3
+                                            class="text-xl font-bold text-white mb-3"
+                                        >
+                                            Download eMark JAR
+                                        </h3>
+                                        <p class="text-gray-300 mb-4">
+                                            Download the latest JAR file:
+                                        </p>
+                                        <div class="code-block text-gray-300">
+                                            curl -L -o eMark.jar
+                                            https://github.com/devcodemuni/eMark/releases/latest/download/eMark.jar
+                                        </div>
+                                        <p class="text-sm text-gray-400 mt-2">
+                                            Or download directly from the
+                                            <a
+                                                href="https://github.com/devcodemuni/eMark/releases/latest"
+                                                target="_blank"
+                                                class="text-purple-400 hover:underline"
+                                                >releases page</a
+                                            >
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <!-- Step 3 -->
+                                <div class="flex items-start space-x-4">
+                                    <div class="step-number">3</div>
+                                    <div class="flex-1">
+                                        <h3
+                                            class="text-xl font-bold text-white mb-3"
+                                        >
+                                            Launch eMark
+                                        </h3>
+                                        <p class="text-gray-300 mb-4">
+                                            Run the JAR file:
+                                        </p>
+                                        <div class="code-block text-gray-300">
+                                            java -jar eMark.jar
+                                        </div>
+                                        <div class="info-box mt-4">
+                                            <p class="text-sm">
+                                                <strong>Tip:</strong> Create an
+                                                alias for easy launching:
+                                            </p>
+                                            <div
+                                                class="code-block mt-2 text-gray-300 text-sm"
+                                            >
+                                                echo 'alias emark="java -jar
+                                                ~/Downloads/eMark.jar"' >>
+                                                ~/.zshrc<br />
+                                                source ~/.zshrc
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Java Setup -->
+                    <section id="java-setup" class="mb-16">
+                        <div class="glass rounded-2xl p-8">
+                            <div class="flex items-center space-x-4 mb-6">
+                                <div
+                                    class="w-12 h-12 rounded-xl bg-red-500/20 flex items-center justify-center"
+                                >
+                                    <i
+                                        class="fab fa-java text-2xl text-red-400"
+                                    ></i>
+                                </div>
+                                <h2 class="text-3xl font-bold text-white">
+                                    Java Setup Guide
+                                </h2>
+                            </div>
+
+                            <div class="space-y-6">
+                                <p class="text-gray-300 leading-relaxed">
+                                    Detailed instructions for installing Java 8
+                                    on different platforms.
+                                </p>
+
+                                <div class="warning-box">
+                                    <div class="flex items-start space-x-3">
+                                        <i
+                                            class="fas fa-exclamation-triangle text-yellow-500 text-xl mt-1"
+                                        ></i>
+                                        <div>
+                                            <p
+                                                class="font-semibold text-yellow-500 mb-2"
+                                            >
+                                                Java Version Compatibility
+                                            </p>
+                                            <p class="text-gray-300">
+                                                eMark requires
+                                                <strong
+                                                    >exactly Java 8
+                                                    (1.8.x)</strong
+                                                >. Using Java 7 or Java 9+ will
+                                                not work. If you have multiple
+                                                Java versions installed, ensure
+                                                Java 8 is set as default or use
+                                                the correct path.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="space-y-4">
+                                    <h3 class="text-xl font-bold text-white">
+                                        Verify Java Installation
+                                    </h3>
+                                    <div class="code-block text-gray-300">
+                                        java -version
+                                    </div>
+                                    <p class="text-gray-300">
+                                        Expected output should show version
+                                        1.8.x:
+                                    </p>
+                                    <div
+                                        class="code-block text-gray-300 text-sm"
+                                    >
+                                        java version "1.8.0_xxx"<br />
+                                        Java(TM) SE Runtime Environment (build
+                                        1.8.0_xxx-xxx)<br />
+                                        Java HotSpot(TM) 64-Bit Server VM (build
+                                        25.xxx-xxx, mixed mode)
+                                    </div>
+                                </div>
+
+                                <div class="space-y-4">
+                                    <h3 class="text-xl font-bold text-white">
+                                        Switching Java Versions
+                                    </h3>
+                                    <p class="text-gray-300">
+                                        If you have multiple Java versions
+                                        installed:
+                                    </p>
+
+                                    <div class="glass rounded-lg p-4">
+                                        <h4
+                                            class="font-semibold text-white mb-2"
+                                        >
+                                            Windows
+                                        </h4>
+                                        <p class="text-sm text-gray-400 mb-2">
+                                            Set JAVA_HOME environment variable
+                                            to Java 8 directory
+                                        </p>
+                                        <div
+                                            class="code-block text-gray-300 text-sm"
+                                        >
+                                            setx JAVA_HOME "C:\Program
+                                            Files\Java\jdk1.8.0_xxx"
+                                        </div>
+                                    </div>
+
+                                    <div class="glass rounded-lg p-4">
+                                        <h4
+                                            class="font-semibold text-white mb-2"
+                                        >
+                                            Linux
+                                        </h4>
+                                        <div
+                                            class="code-block text-gray-300 text-sm"
+                                        >
+                                            sudo update-alternatives --config
+                                            java
+                                        </div>
+                                    </div>
+
+                                    <div class="glass rounded-lg p-4">
+                                        <h4
+                                            class="font-semibold text-white mb-2"
+                                        >
+                                            macOS
+                                        </h4>
+                                        <div
+                                            class="code-block text-gray-300 text-sm"
+                                        >
+                                            export
+                                            JAVA_HOME=$(/usr/libexec/java_home
+                                            -v 1.8)
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Certificate Setup -->
+                    <section id="certificate-setup" class="mb-16">
+                        <div class="glass rounded-2xl p-8">
+                            <div class="flex items-center space-x-4 mb-6">
+                                <div
+                                    class="w-12 h-12 rounded-xl bg-green-500/20 flex items-center justify-center"
+                                >
+                                    <i
+                                        class="fas fa-certificate text-2xl text-green-400"
+                                    ></i>
+                                </div>
+                                <h2 class="text-3xl font-bold text-white">
+                                    Certificate Setup
+                                </h2>
+                            </div>
+
+                            <div class="space-y-6">
+                                <p class="text-gray-300 leading-relaxed">
+                                    Configure your digital certificates for
+                                    signing PDFs. eMark supports multiple
+                                    certificate sources.
+                                </p>
+
+                                <!-- USB Token Setup -->
+                                <div class="glass rounded-lg p-6">
+                                    <h3
+                                        class="text-xl font-bold text-white mb-4 flex items-center"
+                                    >
+                                        <i
+                                            class="fas fa-usb text-yellow-400 mr-3"
+                                        ></i
+                                        >USB Token Setup
+                                    </h3>
+                                    <ol
+                                        class="list-decimal list-inside text-gray-300 space-y-2"
+                                    >
+                                        <li>
+                                            Install the manufacturer's driver
+                                            software for your USB token
+                                        </li>
+                                        <li>
+                                            Insert your USB token into a USB
+                                            port
+                                        </li>
+                                        <li>
+                                            In eMark, go to Settings → Keystore
+                                        </li>
+                                        <li>
+                                            Select "PKCS#11" as the keystore
+                                            type
+                                        </li>
+                                        <li>
+                                            Browse and select the PKCS#11
+                                            library file:
+                                            <div
+                                                class="code-block mt-2 text-sm"
+                                            >
+                                                Windows:
+                                                C:\Windows\System32\eTPKCS11.dll<br />
+                                                Linux: /usr/lib/libeToken.so<br />
+                                                macOS:
+                                                /usr/local/lib/libeToken.dylib
+                                            </div>
+                                        </li>
+                                        <li>
+                                            Enter your token PIN when prompted
+                                        </li>
+                                    </ol>
+                                </div>
+
+                                <!-- PKCS#12/PFX Setup -->
+                                <div class="glass rounded-lg p-6">
+                                    <h3
+                                        class="text-xl font-bold text-white mb-4 flex items-center"
+                                    >
+                                        <i
+                                            class="fas fa-file-archive text-blue-400 mr-3"
+                                        ></i
+                                        >PKCS#12/PFX File Setup
+                                    </h3>
+                                    <ol
+                                        class="list-decimal list-inside text-gray-300 space-y-2"
+                                    >
+                                        <li>
+                                            Obtain your .pfx or .p12 certificate
+                                            file
+                                        </li>
+                                        <li>
+                                            In eMark, go to Settings → Keystore
+                                        </li>
+                                        <li>
+                                            Select "PKCS#12" as the keystore
+                                            type
+                                        </li>
+                                        <li>
+                                            Browse and select your certificate
+                                            file
+                                        </li>
+                                        <li>
+                                            Enter the certificate password when
+                                            signing
+                                        </li>
+                                    </ol>
+                                </div>
+
+                                <!-- Windows Certificate Store -->
+                                <div class="glass rounded-lg p-6">
+                                    <h3
+                                        class="text-xl font-bold text-white mb-4 flex items-center"
+                                    >
+                                        <i
+                                            class="fab fa-windows text-indigo-400 mr-3"
+                                        ></i
+                                        >Windows Certificate Store (Windows
+                                        Only)
+                                    </h3>
+                                    <ol
+                                        class="list-decimal list-inside text-gray-300 space-y-2"
+                                    >
+                                        <li>
+                                            Import your certificate to Windows
+                                            Certificate Store
+                                        </li>
+                                        <li>
+                                            In eMark, go to Settings → Keystore
+                                        </li>
+                                        <li>
+                                            Select "Windows-MY" as the keystore
+                                            type
+                                        </li>
+                                        <li>
+                                            Your certificates will be
+                                            automatically detected
+                                        </li>
+                                    </ol>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- First Run -->
+                    <section id="first-run" class="mb-16">
+                        <div class="glass rounded-2xl p-8">
+                            <div class="flex items-center space-x-4 mb-6">
+                                <div
+                                    class="w-12 h-12 rounded-xl bg-purple-500/20 flex items-center justify-center"
+                                >
+                                    <i
+                                        class="fas fa-rocket text-2xl text-purple-400"
+                                    ></i>
+                                </div>
+                                <h2 class="text-3xl font-bold text-white">
+                                    First Run & Configuration
+                                </h2>
+                            </div>
+
+                            <div class="space-y-6">
+                                <p class="text-gray-300 leading-relaxed">
+                                    Quick guide to get started with eMark after
+                                    installation.
+                                </p>
+
+                                <div class="space-y-4">
+                                    <div class="flex items-start space-x-4">
+                                        <div class="text-3xl">1️⃣</div>
+                                        <div class="flex-1">
+                                            <h3
+                                                class="text-lg font-bold text-white mb-2"
+                                            >
+                                                Launch eMark
+                                            </h3>
+                                            <p class="text-gray-300">
+                                                Open eMark from your application
+                                                menu or run command
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <div class="flex items-start space-x-4">
+                                        <div class="text-3xl">2️⃣</div>
+                                        <div class="flex-1">
+                                            <h3
+                                                class="text-lg font-bold text-white mb-2"
+                                            >
+                                                Configure Certificate
+                                            </h3>
+                                            <p class="text-gray-300">
+                                                Go to Settings → Keystore and
+                                                configure your certificate
+                                                source
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <div class="flex items-start space-x-4">
+                                        <div class="text-3xl">3️⃣</div>
+                                        <div class="flex-1">
+                                            <h3
+                                                class="text-lg font-bold text-white mb-2"
+                                            >
+                                                Open PDF
+                                            </h3>
+                                            <p class="text-gray-300">
+                                                Click File → Open and select a
+                                                PDF document to sign
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <div class="flex items-start space-x-4">
+                                        <div class="text-3xl">4️⃣</div>
+                                        <div class="flex-1">
+                                            <h3
+                                                class="text-lg font-bold text-white mb-2"
+                                            >
+                                                Sign Document
+                                            </h3>
+                                            <p class="text-gray-300">
+                                                Click "Begin Sign", draw
+                                                signature area, customize
+                                                appearance, and sign
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="success-box">
+                                    <div class="flex items-center space-x-3">
+                                        <i
+                                            class="fas fa-check-circle text-green-400 text-xl"
+                                        ></i>
+                                        <p class="font-semibold text-green-400">
+                                            You're all set! Start signing PDFs
+                                            with eMark.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Troubleshooting -->
+                    <section id="troubleshooting" class="mb-16">
+                        <div class="glass rounded-2xl p-8">
+                            <div class="flex items-center space-x-4 mb-6">
+                                <div
+                                    class="w-12 h-12 rounded-xl bg-red-500/20 flex items-center justify-center"
+                                >
+                                    <i
+                                        class="fas fa-wrench text-2xl text-red-400"
+                                    ></i>
+                                </div>
+                                <h2 class="text-3xl font-bold text-white">
+                                    Troubleshooting
+                                </h2>
+                            </div>
+
+                            <div class="space-y-6">
+                                <!-- Issue 1 -->
+                                <div class="glass rounded-lg p-6">
+                                    <h3
+                                        class="text-lg font-bold text-white mb-3"
+                                    >
+                                        ❌ Java Version Error
+                                    </h3>
+                                    <p class="text-gray-300 mb-2">
+                                        <strong>Problem:</strong> "Unsupported
+                                        major.minor version" or "Java version
+                                        error"
+                                    </p>
+                                    <p class="text-gray-300 mb-2">
+                                        <strong>Solution:</strong>
+                                    </p>
+                                    <ul
+                                        class="list-disc list-inside text-gray-300 space-y-1 ml-4"
+                                    >
+                                        <li>
+                                            Verify you have Java 8 installed:
+                                            <code
+                                                class="px-2 py-1 bg-gray-800 rounded text-sm"
+                                                >java -version</code
+                                            >
+                                        </li>
+                                        <li>
+                                            If using Java 9+, uninstall and
+                                            install Java 8
+                                        </li>
+                                        <li>
+                                            Set JAVA_HOME to point to Java 8
+                                            installation
+                                        </li>
+                                    </ul>
+                                </div>
+
+                                <!-- Issue 2 -->
+                                <div class="glass rounded-lg p-6">
+                                    <h3
+                                        class="text-lg font-bold text-white mb-3"
+                                    >
+                                        ❌ Certificate Not Detected
+                                    </h3>
+                                    <p class="text-gray-300 mb-2">
+                                        <strong>Problem:</strong> USB token or
+                                        certificate not showing up
+                                    </p>
+                                    <p class="text-gray-300 mb-2">
+                                        <strong>Solution:</strong>
+                                    </p>
+                                    <ul
+                                        class="list-disc list-inside text-gray-300 space-y-1 ml-4"
+                                    >
+                                        <li>
+                                            Install manufacturer's driver
+                                            software for your USB token
+                                        </li>
+                                        <li>
+                                            Verify PKCS#11 library path is
+                                            correct in Settings
+                                        </li>
+                                        <li>
+                                            Check that certificate is valid and
+                                            not expired
+                                        </li>
+                                        <li>
+                                            Try unplugging and replugging the
+                                            USB token
+                                        </li>
+                                    </ul>
+                                </div>
+
+                                <!-- Issue 3 -->
+                                <div class="glass rounded-lg p-6">
+                                    <h3
+                                        class="text-lg font-bold text-white mb-3"
+                                    >
+                                        ❌ Application Won't Start
+                                    </h3>
+                                    <p class="text-gray-300 mb-2">
+                                        <strong>Problem:</strong> eMark doesn't
+                                        launch or crashes immediately
+                                    </p>
+                                    <p class="text-gray-300 mb-2">
+                                        <strong>Solution:</strong>
+                                    </p>
+                                    <ul
+                                        class="list-disc list-inside text-gray-300 space-y-1 ml-4"
+                                    >
+                                        <li>
+                                            Ensure Java 8 is properly installed
+                                        </li>
+                                        <li>
+                                            Check system meets minimum
+                                            requirements (2GB RAM)
+                                        </li>
+                                        <li>
+                                            Run from terminal to see error
+                                            messages
+                                        </li>
+                                        <li>Try reinstalling eMark</li>
+                                    </ul>
+                                </div>
+
+                                <!-- Issue 4 -->
+                                <div class="glass rounded-lg p-6">
+                                    <h3
+                                        class="text-lg font-bold text-white mb-3"
+                                    >
+                                        ❌ PDF Loading Issues
+                                    </h3>
+                                    <p class="text-gray-300 mb-2">
+                                        <strong>Problem:</strong> PDF won't open
+                                        or displays incorrectly
+                                    </p>
+                                    <p class="text-gray-300 mb-2">
+                                        <strong>Solution:</strong>
+                                    </p>
+                                    <ul
+                                        class="list-disc list-inside text-gray-300 space-y-1 ml-4"
+                                    >
+                                        <li>Verify PDF is not corrupted</li>
+                                        <li>
+                                            Check if PDF is password-protected
+                                            (enter password)
+                                        </li>
+                                        <li>
+                                            Ensure file permissions allow
+                                            reading
+                                        </li>
+                                        <li>
+                                            Try with a different PDF to isolate
+                                            the issue
+                                        </li>
+                                    </ul>
+                                </div>
+
+                                <!-- Issue 5 -->
+                                <div class="glass rounded-lg p-6">
+                                    <h3
+                                        class="text-lg font-bold text-white mb-3"
+                                    >
+                                        ❌ Signature Verification Failed
+                                    </h3>
+                                    <p class="text-gray-300 mb-2">
+                                        <strong>Problem:</strong> Signed PDF
+                                        shows as invalid in Adobe Reader
+                                    </p>
+                                    <p class="text-gray-300 mb-2">
+                                        <strong>Solution:</strong>
+                                    </p>
+                                    <ul
+                                        class="list-disc list-inside text-gray-300 space-y-1 ml-4"
+                                    >
+                                        <li>
+                                            Add CA certificate to Adobe Reader's
+                                            trust store
+                                        </li>
+                                        <li>
+                                            Check internet connection for
+                                            OCSP/CRL validation
+                                        </li>
+                                        <li>
+                                            Verify certificate chain is complete
+                                        </li>
+                                        <li>
+                                            Ensure certificate was valid at time
+                                            of signing
+                                        </li>
+                                    </ul>
+                                </div>
+
+                                <div class="info-box">
+                                    <div class="flex items-start space-x-3">
+                                        <i
+                                            class="fas fa-info-circle text-blue-400 text-xl mt-1"
+                                        ></i>
+                                        <div>
+                                            <p
+                                                class="font-semibold text-blue-400 mb-2"
+                                            >
+                                                Need More Help?
+                                            </p>
+                                            <p class="text-gray-300">
+                                                Visit our
+                                                <a
+                                                    href="https://github.com/devcodemuni/eMark/issues"
+                                                    target="_blank"
+                                                    class="text-purple-400 hover:underline"
+                                                    >GitHub Issues</a
+                                                >
+                                                for support or to report bugs.
+                                                Check the
+                                                <a
+                                                    href="https://github.com/devcodemuni/eMark/wiki"
+                                                    target="_blank"
+                                                    class="text-purple-400 hover:underline"
+                                                    >Wiki</a
+                                                >
+                                                for detailed documentation.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Support Section -->
+                    <div class="glass rounded-2xl p-8 text-center">
+                        <h2 class="text-3xl font-bold mb-4 gradient-text">
+                            Need Help?
+                        </h2>
+                        <p class="text-gray-300 mb-8">
+                            Can't find what you're looking for? Our community is
+                            here to help!
+                        </p>
+                        <div
+                            class="flex flex-col sm:flex-row gap-4 justify-center"
+                        >
+                            <a
+                                href="https://github.com/devcodemuni/eMark/issues"
+                                target="_blank"
+                                class="inline-flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 rounded-lg font-semibold hover:from-purple-700 hover:to-indigo-700 transition-all shadow-lg"
+                            >
+                                <i class="fas fa-bug"></i>
+                                <span>Report an Issue</span>
+                            </a>
+                            <a
+                                href="https://github.com/devcodemuni/eMark/discussions"
+                                target="_blank"
+                                class="inline-flex items-center space-x-2 px-6 py-3 glass rounded-lg font-semibold hover:bg-gray-800 transition-all"
+                            >
+                                <i class="fas fa-comments"></i>
+                                <span>Join Discussion</span>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="py-8 border-t border-gray-800 mt-12">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="text-center">
+                    <p class="text-sm text-gray-400">
+                        Made with ❤️ by
+                        <a
+                            href="https://github.com/devcodemuni"
+                            target="_blank"
+                            class="text-purple-400 hover:underline"
+                            >CodeMuni</a
+                        >
+                        • Licensed under AGPL 3.0
+                    </p>
+                    <p class="text-sm text-gray-400 mt-2">
+                        <a
+                            href="index.html"
+                            class="text-gray-400 hover:text-white transition-colors"
+                            >← Back to Home</a
+                        >
+                    </p>
+                </div>
+            </div>
+        </footer>
+
+        <script>
+            // Tab switching
+            function switchTab(tab) {
+                // Hide all tabs
+                document.querySelectorAll(".tab-content").forEach((content) => {
+                    content.classList.remove("active");
+                });
+                document.querySelectorAll(".tab-button").forEach((button) => {
+                    button.classList.remove("active");
+                });
+
+                // Show selected tab
+                document.getElementById(tab + "-tab").classList.add("active");
+                event.target.classList.add("active");
+            }
+
+            // Smooth scroll and active nav
+            document.querySelectorAll(".nav-link").forEach((link) => {
+                link.addEventListener("click", function (e) {
+                    e.preventDefault();
+                    const target = document.querySelector(
+                        this.getAttribute("href"),
+                    );
+                    if (target) {
+                        target.scrollIntoView({
+                            behavior: "smooth",
+                            block: "start",
+                        });
+
+                        // Update active state
+                        document
+                            .querySelectorAll(".nav-link")
+                            .forEach((l) => l.classList.remove("active"));
+                        this.classList.add("active");
+                    }
+                });
+            });
+
+            // Update active nav on scroll
+            window.addEventListener("scroll", () => {
+                const sections = document.querySelectorAll("section[id]");
+                const navLinks = document.querySelectorAll(".nav-link");
+
+                let current = "";
+                sections.forEach((section) => {
+                    const sectionTop = section.offsetTop;
+                    const sectionHeight = section.clientHeight;
+                    if (window.pageYOffset >= sectionTop - 200) {
+                        current = section.getAttribute("id");
+                    }
+                });
+
+                navLinks.forEach((link) => {
+                    link.classList.remove("active");
+                    if (link.getAttribute("href") === "#" + current) {
+                        link.classList.add("active");
+                    }
+                });
+            });
+        </script>
+    </body>
+</html>

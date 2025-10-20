@@ -66,9 +66,6 @@ public final class PKCS11KeyStoreProvider implements KeyStoreProvider {
                 "Keystore initialization failed: keystore name is not set.");
     }
 
-    public PKCS11KeyStoreProvider() {
-    }
-
     public void setPkcs11LibPathsToBeLoadPublicKey(List<String> pkcs11LibPathsToBeLoadPublicKey) {
         this.pkcs11LibPathsToBeLoadPublicKey = pkcs11LibPathsToBeLoadPublicKey;
     }

@@ -150,10 +150,7 @@ public class TrustStoreManager {
             // Parse certificates - may return multiple certs from one file
             List<X509Certificate> certs = parseCertificatesFromStream(is);
 
-            for (X509Certificate cert : certs) {
-                embeddedCertificates.add(cert);
-                log.info("Loaded embedded certificate: " + cert.getSubjectDN());
-            }
+            embeddedCertificates.addAll(certs);
         } finally {
             is.close();
         }

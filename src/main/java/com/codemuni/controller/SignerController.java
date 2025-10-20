@@ -52,7 +52,7 @@ public class SignerController {
 
 
     public SignerController() {
-        pkcs11KeyStoreProvider = new PKCS11KeyStoreProvider();
+        pkcs11KeyStoreProvider = new PKCS11KeyStoreProvider(AppConstants.PKCS11_KEY_STORE);
         signerService = new PdfSignerService();
     }
 

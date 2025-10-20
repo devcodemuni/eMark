@@ -24,13 +24,19 @@ public class PlaceholderPanel extends JPanel {
         JLabel titleLabel = new JLabel("No PDF Loaded");
         titleLabel.setFont(titleLabel.getFont().deriveFont(Font.BOLD, 24f));
         titleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
-        titleLabel.setForeground(new Color(60, 60, 60));
+        titleLabel.setForeground(new Color(78, 78, 78));
 
         // Subtitle - lighter weight, slightly smaller
         JLabel subtitleLabel = new JLabel("Drag and drop a PDF here or click below to open a file");
         subtitleLabel.setFont(subtitleLabel.getFont().deriveFont(Font.PLAIN, 14f));
         subtitleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
         subtitleLabel.setForeground(new Color(120, 120, 120));
+
+        JLabel subtitleLabel2 = new JLabel("💡 Enjoy a secure, reliable, and completely free experience.");
+        subtitleLabel2.setFont(subtitleLabel.getFont().deriveFont(Font.BOLD, 16f));
+        subtitleLabel2.setAlignmentX(Component.CENTER_ALIGNMENT);
+        subtitleLabel2.setForeground(new Color(255, 237, 107, 255)); // subtle white for dark UI
+
 
         // Open PDF button - use FlatLaf default button styling
         JButton openBtn = UiFactory.createButton("Open PDF", null); // null to use FlatLaf default button color
@@ -45,6 +51,8 @@ public class PlaceholderPanel extends JPanel {
         add(Box.createRigidArea(new Dimension(0, 10)));
         add(subtitleLabel);
         add(Box.createRigidArea(new Dimension(0, 30)));
+        add(subtitleLabel2);
+        add(Box.createRigidArea(new Dimension(0, 40)));
         add(openBtn);
         add(Box.createVerticalGlue());
     }

@@ -22,6 +22,7 @@ public class App {
 
     static {
         System.setProperty("sun.security.pkcs11.disableNativeDialog", "true");
+        System.setProperty("file.encoding", "UTF-8");
         FlatMacDarkLaf.setup();
         UIManager.put("defaultFont", new Font("SansSerif", Font.PLAIN, 13));
     }
