@@ -23,11 +23,11 @@ public class Signer {
 
     private static final Log log = LogFactory.getLog(Signer.class);
     private static final int BASE_SIGNATURE_SIZE = 10000;
-    private static final int CERTIFICATE_SIZE_ESTIMATE = 15_000;
-    private static final int TIMESTAMP_SIZE_ESTIMATE = 15_000;
-    private static final int LTV_SIZE_ESTIMATE = 12_50_000;
-    private static final int CMS_OVERHEAD = 10_000;
-    private static final int SAFETY_MARGIN = 10_000;
+    private static final int CERTIFICATE_SIZE_ESTIMATE = 20_000;  // Increased for larger certs and chains
+    private static final int TIMESTAMP_SIZE_ESTIMATE = 20_000;    // Increased for TSA responses
+    private static final int LTV_SIZE_ESTIMATE = 25_00_000;      // 2,500,000 bytes (2.5MB) for LTV with CRLs + OCSP
+    private static final int CMS_OVERHEAD = 15_000;              // Increased for larger CMS structures
+    private static final int SAFETY_MARGIN = 50_000;             // Increased safety margin for 2048-bit keys
 
     public static String buildDetailedMessage(String context, Exception e) {
         String baseMsg = context != null ? context : "An error occurred";

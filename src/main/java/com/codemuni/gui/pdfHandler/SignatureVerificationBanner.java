@@ -201,10 +201,12 @@ public class SignatureVerificationBanner extends JPanel {
 
     /**
      * Updates the banner based on verification results.
-     * Follows PDF viewer logic:
-     * - ALL_VALID (green): All signatures valid AND trusted
-     * - SOME_INVALID (yellow): Mixed results OR valid but not trusted
-     * - ALL_INVALID (red): All signatures invalid (modified/revoked/expired)
+     * Enhanced for India CCA compliance with detailed status tracking.
+     *
+     * Color coding:
+     * - ALL_VALID (green): All signatures valid, trusted, CCA-compliant
+     * - SOME_INVALID (yellow): Warnings, mixed results, or trust issues
+     * - ALL_INVALID (red): Critical failures (modified/revoked/invalid)
      */
     public void updateStatus(List<SignatureVerificationResult> results) {
         if (results == null || results.isEmpty()) {
@@ -214,15 +216,22 @@ public class SignatureVerificationBanner extends JPanel {
         }
 
         int totalSignatures = results.size();
-        int validAndTrusted = 0;  // Green: Valid + Trusted
-        int validButUntrusted = 0; // Yellow: Valid but not trusted
-        int invalid = 0;           // Red: Invalid (modified/revoked/expired)
-        
-        // Track specific failure reasons for better messaging
+        int validAndTrusted = 0;      // Green: Valid + Trusted
+        int validButUntrusted = 0;     // Yellow: Valid but not trusted
+        int validWithWarnings = 0;     // Yellow: Valid but has warnings (weak algo, no timestamp, etc.)
+        int invalid = 0;               // Red: Invalid (modified/revoked/expired)
+
+        // Track specific failure reasons for better messaging (CRITICAL errors)
         int documentModified = 0;
         int signatureInvalid = 0;
         int certificateRevoked = 0;
         int certificateExpired = 0;
+        int weakAlgorithm = 0;
+
+        // Track warning conditions (non-critical issues)
+        int deprecatedAlgorithm = 0;
+        int noTimestamp = 0;
+        int revocationNotChecked = 0;
 
         // Check if document is certified (any certification signature present)
         isCertified = false;
@@ -233,53 +242,87 @@ public class SignatureVerificationBanner extends JPanel {
             }
         }
 
-        // Categorize each signature
+        // Categorize each signature with enhanced CCA compliance checks
         for (SignatureVerificationResult result : results) {
-            if (isSignatureValid(result)) {
-                // Signature is cryptographically valid
-                if (result.isCertificateTrusted()) {
-                    validAndTrusted++;
-                } else {
-                    validButUntrusted++; // Valid but trust cannot be established
-                }
-            } else {
-                invalid++; // Invalid (document modified, signature broken, cert revoked, etc.)
+            boolean hasWarnings = hasWarnings(result);
+            boolean hasCriticalErrors = !isSignatureValid(result);
 
-                // Track specific failure reason (priority order)
+            if (hasCriticalErrors) {
+                // CRITICAL: Signature is invalid
+                invalid++;
+
+                // Track specific failure reason (priority order for messaging)
                 if (!result.isDocumentIntact()) {
                     documentModified++;
                 } else if (!result.isSignatureValid()) {
-                    signatureInvalid++;
+                    // Check if it's due to weak algorithm (MD5, etc.)
+                    if (hasWeakAlgorithm(result)) {
+                        weakAlgorithm++;
+                    } else {
+                        signatureInvalid++;
+                    }
                 } else if (result.isCertificateRevoked()) {
                     certificateRevoked++;
                 } else if (!result.isCertificateValid()) {
                     certificateExpired++;
                 }
+            } else if (hasWarnings) {
+                // WARNING: Signature valid but has non-critical issues
+                validWithWarnings++;
+
+                // Track warning types
+                if (hasDeprecatedAlgorithm(result)) {
+                    deprecatedAlgorithm++;
+                }
+                if (!result.isTimestampValid() && !hasTimestamp(result)) {
+                    noTimestamp++;
+                }
+                if (hasRevocationCheckIssue(result)) {
+                    revocationNotChecked++;
+                }
+
+                // Also check trust
+                if (!result.isCertificateTrusted()) {
+                    validButUntrusted++;
+                }
+            } else {
+                // VALID: No errors, no warnings
+                if (result.isCertificateTrusted()) {
+                    validAndTrusted++;
+                } else {
+                    validButUntrusted++; // Valid but trust cannot be established
+                }
             }
         }
 
-        // Determine overall status (PDF viewer style)
+        // Determine overall status with enhanced CCA logic
         VerificationStatus newStatus;
         if (invalid > 0) {
-            // If ANY signature is invalid, show red/invalid
+            // CRITICAL ERRORS: At least one signature is invalid
             if (invalid == totalSignatures) {
-                newStatus = VerificationStatus.ALL_INVALID;
+                newStatus = VerificationStatus.ALL_INVALID; // RED: All invalid
             } else {
-                newStatus = VerificationStatus.SOME_INVALID;
+                newStatus = VerificationStatus.SOME_INVALID; // YELLOW: Mixed (some invalid)
             }
-        } else if (validButUntrusted > 0) {
-            // All signatures valid but some/all not trusted - show yellow/warning
-            newStatus = VerificationStatus.SOME_INVALID; // Using SOME_INVALID for yellow color
+        } else if (validWithWarnings > 0 || validButUntrusted > 0) {
+            // WARNINGS: All signatures cryptographically valid but have issues
+            // - Weak/deprecated algorithms
+            // - No timestamp
+            // - Revocation not checked
+            // - Trust issues
+            newStatus = VerificationStatus.SOME_INVALID; // YELLOW: Valid with warnings
         } else {
-            // All signatures valid AND trusted - show green
-            newStatus = VerificationStatus.ALL_VALID;
+            // ALL VALID: No errors, no warnings, all trusted
+            newStatus = VerificationStatus.ALL_VALID; // GREEN: Perfect
         }
 
         currentStatus = newStatus;
         // Clear progress message when showing results
         clearProgress();
         updateUI(newStatus, totalSignatures, validAndTrusted, validButUntrusted, invalid,
-                documentModified, signatureInvalid, certificateRevoked, certificateExpired);
+                documentModified, signatureInvalid, certificateRevoked, certificateExpired,
+                weakAlgorithm, deprecatedAlgorithm, noTimestamp, revocationNotChecked,
+                validWithWarnings);
         setVisible(true);
     }
 
@@ -331,13 +374,15 @@ public class SignatureVerificationBanner extends JPanel {
 
     /**
      * Updates the UI based on verification status.
-     * PDF viewer style messages with specific failure reasons:
-     * - Green: "Signed and all signatures are valid"
-     * - Yellow: "At least one signature has problems" or "Valid but identity of signer could not be verified"
-     * - Red: "At least one signature is invalid" with specific reason
+     * Enhanced CCA-compliant messages with specific failure/warning reasons:
+     * - GREEN: All signatures valid, trusted, and CCA-compliant
+     * - YELLOW: Valid but with warnings (weak algorithms, no timestamp, trust issues)
+     * - RED: Critical failures (document modified, signature invalid, cert revoked)
      */
     private void updateUI(VerificationStatus status, int total, int validTrusted, int validUntrusted, int invalid,
-                         int documentModified, int signatureInvalid, int certificateRevoked, int certificateExpired) {
+                         int documentModified, int signatureInvalid, int certificateRevoked, int certificateExpired,
+                         int weakAlgorithm, int deprecatedAlgorithm, int noTimestamp, int revocationNotChecked,
+                         int validWithWarnings) {
         String iconName;
         String message;
         Color bgColor;
@@ -392,11 +437,13 @@ public class SignatureVerificationBanner extends JPanel {
 
             case SOME_INVALID:
                 iconName = "question_circle.png";
-                // Determine message based on what failed
+                // Determine message based on what failed/warned
                 if (invalid > 0) {
-                    // Some signatures are actually invalid - provide specific reason
+                    // CRITICAL: Some signatures are actually invalid
                     if (documentModified > 0) {
                         message = "Document has been modified. " + invalid + " of " + total + " signature" + (invalid > 1 ? "s are" : " is") + " invalid.";
+                    } else if (weakAlgorithm > 0) {
+                        message = "Weak or forbidden algorithm detected. " + weakAlgorithm + " signature" + (weakAlgorithm > 1 ? "s are" : " is") + " insecure (CCA non-compliant).";
                     } else if (signatureInvalid > 0) {
                         message = invalid + " of " + total + " signature" + (invalid > 1 ? "s are" : " is") + " invalid or corrupted.";
                     } else if (certificateRevoked > 0) {
@@ -406,13 +453,42 @@ public class SignatureVerificationBanner extends JPanel {
                     } else {
                         message = "At least one signature has problems. " + invalid + " of " + total + " signature" + (invalid > 1 ? "s" : "") + " could not be verified.";
                     }
+                } else if (validWithWarnings > 0) {
+                    // WARNING: Valid but has non-critical issues (CCA recommendations)
+                    StringBuilder warningMsg = new StringBuilder("Signed and all signatures are valid, but ");
+
+                    if (deprecatedAlgorithm > 0 && noTimestamp > 0) {
+                        warningMsg.append(deprecatedAlgorithm).append(" signature")
+                                .append(deprecatedAlgorithm > 1 ? "s use" : " uses")
+                                .append(" deprecated algorithm (SHA-1) and ")
+                                .append(noTimestamp).append(" lack")
+                                .append(noTimestamp > 1 ? "" : "s")
+                                .append(" timestamp (CCA recommends SHA-256+ with timestamp).");
+                    } else if (deprecatedAlgorithm > 0) {
+                        warningMsg.append(deprecatedAlgorithm).append(" signature")
+                                .append(deprecatedAlgorithm > 1 ? "s use" : " uses")
+                                .append(" deprecated algorithm (SHA-1). CCA recommends SHA-256 or stronger.");
+                    } else if (noTimestamp > 0) {
+                        warningMsg.append(noTimestamp).append(" signature")
+                                .append(noTimestamp > 1 ? "s lack" : " lacks")
+                                .append(" timestamp. CCA recommends trusted timestamps for legal validity.");
+                    } else if (revocationNotChecked > 0) {
+                        warningMsg.append("revocation status could not be verified for ")
+                                .append(revocationNotChecked).append(" signature")
+                                .append(revocationNotChecked > 1 ? "s" : "")
+                                .append(".");
+                    } else {
+                        warningMsg.append("some signatures have warnings. See signature panel for details.");
+                    }
+
+                    message = warningMsg.toString();
                 } else if (validUntrusted > 0) {
                     // All valid but some/all not trusted
                     if (validUntrusted == total) {
                         message = "Signed and all signatures are valid, but the identity of one or more signers could not be verified.";
                     } else {
-                        message = "Signed and all signatures are valid, but the identity of " + validUntrusted + 
-                                 " signer" + (validUntrusted > 1 ? "s" : "") + " could not be verified.";
+                        message = "Signed and all signatures are valid, but the identity of " + validUntrusted +
+                                " signer" + (validUntrusted > 1 ? "s" : "") + " could not be verified.";
                     }
                 } else {
                     message = "At least one signature has problems. See signature panel for details.";
@@ -500,7 +576,7 @@ public class SignatureVerificationBanner extends JPanel {
      */
     private void updateButtonStyle(Color bgColor) {
         boolean isSelected = signatureButton.isSelected();
-        
+
         // Calculate button background color based on banner color and state
         int darkenAmount;
         if (isSelected) {
@@ -508,19 +584,100 @@ public class SignatureVerificationBanner extends JPanel {
         } else {
             darkenAmount = buttonHovered ? 35 : 20; // Lighter when not selected
         }
-        
+
         Color buttonBg = new Color(
             Math.max(0, bgColor.getRed() - darkenAmount),
             Math.max(0, bgColor.getGreen() - darkenAmount),
             Math.max(0, bgColor.getBlue() - darkenAmount)
         );
         signatureButton.setBackground(buttonBg);
-        
+
         // Set text/border color based on banner foreground
         Color fgColor = messageLabel.getForeground();
         signatureButton.setForeground(fgColor);
-        
+
         // Repaint to apply new colors
         signatureButton.repaint();
+    }
+
+    /**
+     * Checks if signature has non-critical warnings (CCA recommendations).
+     * Warnings include:
+     * - Deprecated hash algorithms (SHA-1)
+     * - Missing timestamp
+     * - Revocation check failures
+     */
+    private boolean hasWarnings(SignatureVerificationResult result) {
+        // Check for deprecated algorithm warnings
+        if (hasDeprecatedAlgorithm(result)) return true;
+
+        // Check for missing timestamp
+        if (!hasTimestamp(result)) return true;
+
+        // Check for revocation check issues
+        if (hasRevocationCheckIssue(result)) return true;
+
+        return false;
+    }
+
+    /**
+     * Checks if signature uses weak/forbidden algorithm (MD5, etc.).
+     * This is a CRITICAL error, not just a warning.
+     */
+    private boolean hasWeakAlgorithm(SignatureVerificationResult result) {
+        if (result.getVerificationErrors() == null) return false;
+
+        for (String error : result.getVerificationErrors()) {
+            // Check for forbidden algorithm errors
+            if (error.contains("FORBIDDEN") && error.contains("algorithm")) {
+                return true;
+            }
+            if (error.contains("MD5") || error.contains("MD2") || error.contains("MD4")) {
+                return true;
+            }
+            if (error.contains("too weak") && error.contains("bits")) {
+                return true; // RSA < 2048 bits
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Checks if signature uses deprecated algorithm (SHA-1).
+     * This is a WARNING (CCA recommendation), not an error.
+     */
+    private boolean hasDeprecatedAlgorithm(SignatureVerificationResult result) {
+        if (result.getVerificationWarnings() == null) return false;
+
+        for (String warning : result.getVerificationWarnings()) {
+            if (warning.contains("DEPRECATED") && warning.contains("algorithm")) {
+                return true;
+            }
+            if (warning.contains("SHA-1")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Checks if signature has a timestamp.
+     */
+    private boolean hasTimestamp(SignatureVerificationResult result) {
+        return result.isTimestampValid() || result.getTimestampDate() != null;
+    }
+
+    /**
+     * Checks if revocation check failed or could not be performed.
+     */
+    private boolean hasRevocationCheckIssue(SignatureVerificationResult result) {
+        if (result.getRevocationStatus() == null) return true;
+
+        String status = result.getRevocationStatus();
+        // Check for failure statuses
+        return status.contains("Not Checked") ||
+               status.contains("Unknown") ||
+               status.contains("Network Error") ||
+               status.contains("Failed");
     }
 }

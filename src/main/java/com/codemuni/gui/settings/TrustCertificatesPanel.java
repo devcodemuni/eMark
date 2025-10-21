@@ -9,7 +9,12 @@ import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import javax.swing.border.TitledBorder;
 import javax.swing.table.DefaultTableModel;
+import javax.swing.table.TableRowSorter;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 import java.awt.*;
+import java.awt.event.KeyAdapter;
+import java.awt.event.KeyEvent;
 import java.io.File;
 import java.io.FileInputStream;
 import java.security.cert.Certificate;
@@ -34,7 +39,10 @@ public class TrustCertificatesPanel extends JPanel {
     private final TrustStoreManager trustStoreManager;
     private final DefaultTableModel tableModel;
     private final JTable certificatesTable;
+    private final TableRowSorter<DefaultTableModel> tableSorter;
     private JLabel statusLabel;
+    private JTextField searchField;
+    private JLabel matchCountLabel;
 
     public TrustCertificatesPanel() {
         this.trustStoreManager = TrustStoreManager.getInstance();
@@ -56,6 +64,11 @@ public class TrustCertificatesPanel extends JPanel {
             }
         };
         certificatesTable = new JTable(tableModel);
+
+        // Add table sorter for search functionality
+        tableSorter = new TableRowSorter<DefaultTableModel>(tableModel);
+        certificatesTable.setRowSorter(tableSorter);
+
         certificatesTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         certificatesTable.setRowHeight(UIConstants.Dimensions.TABLE_ROW_HEIGHT);
         certificatesTable.setFont(UIConstants.Fonts.NORMAL_PLAIN);
@@ -124,20 +137,27 @@ public class TrustCertificatesPanel extends JPanel {
         });
 
         JScrollPane scrollPane = new JScrollPane(certificatesTable);
-        scrollPane.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createTitledBorder(
-                BorderFactory.createLineBorder(UIConstants.Colors.BORDER_PRIMARY, 1),
-                "Trust Certificates (Embedded + Manual)",
-                TitledBorder.LEFT,
-                TitledBorder.TOP,
-                UIConstants.Fonts.LARGE_BOLD,
-                UIConstants.Colors.TEXT_SECONDARY
-            ),
-            UIConstants.Padding.SMALL
-        ));
+        scrollPane.setBorder(BorderFactory.createLineBorder(UIConstants.Colors.BORDER_PRIMARY, 1));
         scrollPane.getViewport().setBackground(UIConstants.Colors.BG_SECONDARY);
 
-        add(scrollPane, BorderLayout.CENTER);
+        // Create panel to hold search bar and table
+        JPanel tablePanel = new JPanel(new BorderLayout(0, 0));
+        tablePanel.setBackground(UIConstants.Colors.BG_PRIMARY);
+        tablePanel.setBorder(BorderFactory.createTitledBorder(
+            BorderFactory.createLineBorder(UIConstants.Colors.BORDER_PRIMARY, 1),
+            "Trust Certificates (Embedded + Manual)",
+            TitledBorder.LEFT,
+            TitledBorder.TOP,
+            UIConstants.Fonts.LARGE_BOLD,
+            UIConstants.Colors.TEXT_SECONDARY
+        ));
+
+        // Add search panel
+        JPanel searchPanel = createSearchPanel();
+        tablePanel.add(searchPanel, BorderLayout.NORTH);
+        tablePanel.add(scrollPane, BorderLayout.CENTER);
+
+        add(tablePanel, BorderLayout.CENTER);
 
         // Bottom panel with buttons and status
         JPanel bottomPanel = createBottomPanel();
@@ -145,6 +165,132 @@ public class TrustCertificatesPanel extends JPanel {
 
         // Load certificates
         loadCertificates();
+    }
+
+    /**
+     * Creates the search panel with search field and clear button.
+     */
+    private JPanel createSearchPanel() {
+        JPanel panel = new JPanel(new BorderLayout(UIConstants.Dimensions.SPACING_SMALL, 0));
+        panel.setBackground(UIConstants.Colors.BG_SECONDARY);
+        panel.setBorder(new EmptyBorder(
+            UIConstants.Dimensions.SPACING_SMALL,
+            UIConstants.Dimensions.SPACING_NORMAL,
+            UIConstants.Dimensions.SPACING_SMALL,
+            UIConstants.Dimensions.SPACING_NORMAL
+        ));
+
+        // Left side - Search label and field
+        JPanel searchInputPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, UIConstants.Dimensions.SPACING_SMALL, 0));
+        searchInputPanel.setBackground(UIConstants.Colors.BG_SECONDARY);
+
+        JLabel searchLabel = new JLabel("Search:");
+        searchLabel.setFont(UIConstants.Fonts.NORMAL_BOLD);
+        searchLabel.setForeground(UIConstants.Colors.TEXT_SECONDARY);
+
+        searchField = new JTextField(30);
+        searchField.setFont(UIConstants.Fonts.NORMAL_PLAIN);
+        searchField.setPreferredSize(new Dimension(300, 28));
+        searchField.setToolTipText("Search by type, alias, subject, or issuer");
+
+        // Add document listener for real-time filtering
+        searchField.getDocument().addDocumentListener(new DocumentListener() {
+            public void changedUpdate(DocumentEvent e) {
+                filterTable();
+            }
+            public void removeUpdate(DocumentEvent e) {
+                filterTable();
+            }
+            public void insertUpdate(DocumentEvent e) {
+                filterTable();
+            }
+        });
+
+        // ESC key to clear search
+        searchField.addKeyListener(new KeyAdapter() {
+            public void keyPressed(KeyEvent e) {
+                if (e.getKeyCode() == KeyEvent.VK_ESCAPE) {
+                    searchField.setText("");
+                }
+            }
+        });
+
+        // Clear button
+        JButton clearButton = new JButton("Clear");
+        clearButton.setFont(UIConstants.Fonts.SMALL_PLAIN);
+        clearButton.setPreferredSize(new Dimension(70, 26));
+        clearButton.setFocusPainted(false);
+        clearButton.setBackground(UIConstants.Colors.BUTTON_SECONDARY);
+        clearButton.setForeground(Color.WHITE);
+        clearButton.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(UIConstants.Colors.BORDER_SECONDARY, 1),
+            BorderFactory.createEmptyBorder(4, 10, 4, 10)
+        ));
+        clearButton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        clearButton.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseEntered(java.awt.event.MouseEvent evt) {
+                clearButton.setBackground(UIConstants.Colors.BUTTON_SECONDARY_HOVER);
+            }
+            public void mouseExited(java.awt.event.MouseEvent evt) {
+                clearButton.setBackground(UIConstants.Colors.BUTTON_SECONDARY);
+            }
+        });
+        clearButton.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                searchField.setText("");
+            }
+        });
+
+        searchInputPanel.add(searchLabel);
+        searchInputPanel.add(searchField);
+        searchInputPanel.add(clearButton);
+
+        panel.add(searchInputPanel, BorderLayout.WEST);
+
+        // Right side - Match count label
+        JPanel matchPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
+        matchPanel.setBackground(UIConstants.Colors.BG_SECONDARY);
+
+        matchCountLabel = new JLabel(" ");
+        matchCountLabel.setFont(UIConstants.Fonts.SMALL_PLAIN);
+        matchCountLabel.setForeground(UIConstants.Colors.TEXT_DISABLED);
+
+        matchPanel.add(matchCountLabel);
+        panel.add(matchPanel, BorderLayout.EAST);
+
+        return panel;
+    }
+
+    /**
+     * Filters the table based on search text.
+     * Searches across Type, Alias, Subject, and Issuer columns.
+     */
+    private void filterTable() {
+        String searchText = searchField.getText().trim();
+
+        if (searchText.isEmpty()) {
+            tableSorter.setRowFilter(null);
+            matchCountLabel.setText(" ");
+        } else {
+            try {
+                // Escape special regex characters for literal search
+                String escapedSearch = searchText.replaceAll("([\\\\\\[\\]{}()*+?.$^|])", "\\\\$1");
+                // Create case-insensitive filter that searches all text columns
+                RowFilter<DefaultTableModel, Object> rowFilter = RowFilter.regexFilter("(?i)" + escapedSearch);
+                tableSorter.setRowFilter(rowFilter);
+
+                // Update match count
+                int matchCount = certificatesTable.getRowCount();
+                int totalCount = tableModel.getRowCount();
+                matchCountLabel.setText("Showing " + matchCount + " of " + totalCount + " certificates");
+                matchCountLabel.setForeground(UIConstants.Colors.STATUS_VALID);
+            } catch (java.util.regex.PatternSyntaxException e) {
+                // If regex is invalid, just show all rows
+                tableSorter.setRowFilter(null);
+                matchCountLabel.setText("Invalid search pattern");
+                matchCountLabel.setForeground(UIConstants.Colors.STATUS_ERROR);
+            }
+        }
     }
 
     private JPanel createHeaderPanel() {
@@ -320,6 +466,11 @@ public class TrustCertificatesPanel extends JPanel {
      * Loads and displays all trust certificates (embedded + manual).
      */
     private void loadCertificates() {
+        // Clear search when reloading
+        if (searchField != null) {
+            searchField.setText("");
+        }
+
         tableModel.setRowCount(0); // Clear table
 
         // Load embedded certificates

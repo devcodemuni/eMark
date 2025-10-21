@@ -305,9 +305,10 @@ public class PdfViewerMain extends JFrame {
         // Reset color manager for new PDF
         colorManager.reset();
 
-        // Show verification progress in banner and panel
+        // Show verification progress in banner and panel + disable buttons
         SwingUtilities.invokeLater(() -> {
             verificationBanner.showVerifying();
+            signaturePanel.setVerifying(true); // Disable verify all button
             if (signaturePanel.isVisible()) {
                 signaturePanel.setVerificationStatus("Verifying signatures...");
             }
@@ -331,6 +332,9 @@ public class PdfViewerMain extends JFrame {
                 SwingUtilities.invokeLater(() -> {
                     // Clear loading cursor state - verification complete
                     setLoadingState(false);
+
+                    // Re-enable buttons
+                    signaturePanel.setVerifying(false);
 
                     // Clear status message
                     signaturePanel.setVerificationStatus("");
@@ -390,6 +394,9 @@ public class PdfViewerMain extends JFrame {
                     // Clear loading cursor state on error
                     setLoadingState(false);
 
+                    // Re-enable buttons
+                    signaturePanel.setVerifying(false);
+
                     signaturePanel.setVerificationStatus("Verification failed");
                     signaturePanel.clearSignatures();
                     signaturePanel.setVisible(false);
@@ -410,8 +417,9 @@ public class PdfViewerMain extends JFrame {
 
         log.info("User triggered verify all signatures");
 
-        // Show progress message
+        // Show progress message + disable buttons
         signaturePanel.setVerificationStatus("Verifying all signatures...");
+        signaturePanel.setVerifying(true); // Disable verify all button
 
         // Re-run verification in background
         new Thread(() -> {
@@ -427,6 +435,7 @@ public class PdfViewerMain extends JFrame {
                 // Update UI on EDT
                 SwingUtilities.invokeLater(() -> {
                     signaturePanel.setVerificationStatus(""); // Clear status
+                    signaturePanel.setVerifying(false); // Re-enable buttons
 
                     if (results != null && !results.isEmpty()) {
                         signaturePanel.updateSignatures(results);
@@ -445,6 +454,7 @@ public class PdfViewerMain extends JFrame {
                 log.error("Error during manual verification", e);
                 SwingUtilities.invokeLater(() -> {
                     signaturePanel.setVerificationStatus("Verification failed");
+                    signaturePanel.setVerifying(false); // Re-enable buttons
                 });
             }
         }, "Manual-Signature-Verification-Thread").start();

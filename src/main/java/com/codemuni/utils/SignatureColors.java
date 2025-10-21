@@ -45,4 +45,36 @@ public final class SignatureColors {
                 return UNKNOWN_COLOR;
         }
     }
+
+    /**
+     * Creates a color with specified alpha (transparency) value.
+     *
+     * @param color Base color
+     * @param alpha Alpha value (0-255, where 0 is fully transparent and 255 is fully opaque)
+     * @return Color with specified alpha
+     */
+    public static Color withAlpha(Color color, int alpha) {
+        return new Color(color.getRed(), color.getGreen(), color.getBlue(), alpha);
+    }
+
+    /**
+     * Creates a lighter version of the given color.
+     *
+     * @param color Base color
+     * @param factor Lightness factor (0.0 to 1.0, where higher values create lighter colors)
+     * @return Lighter version of the color
+     */
+    public static Color lighter(Color color, float factor) {
+        int r = color.getRed();
+        int g = color.getGreen();
+        int b = color.getBlue();
+
+        // Blend with white based on factor
+        int white = 255;
+        r = (int) (r + (white - r) * factor);
+        g = (int) (g + (white - g) * factor);
+        b = (int) (b + (white - b) * factor);
+
+        return new Color(r, g, b);
+    }
 }

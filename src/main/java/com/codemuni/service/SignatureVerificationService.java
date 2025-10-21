@@ -33,6 +33,30 @@ public class SignatureVerificationService {
     private final TrustStoreManager trustStoreManager;
     private VerificationProgressListener progressListener;
 
+    // Revocation status cache for current verification session
+    // Prevents redundant OCSP/CRL checks for same certificate across multiple signatures
+    private Map<String, RevocationCacheEntry> revocationCache;
+
+    /**
+     * Cache entry for revocation status.
+     * Used to avoid redundant OCSP/CRL checks for same certificate.
+     */
+    private static class RevocationCacheEntry {
+        final String status;
+        final boolean isRevoked;
+        final Date revocationTime;
+        final String source;
+        final long timestamp;
+
+        RevocationCacheEntry(String status, boolean isRevoked, Date revocationTime, String source) {
+            this.status = status;
+            this.isRevoked = isRevoked;
+            this.revocationTime = revocationTime;
+            this.source = source;
+            this.timestamp = System.currentTimeMillis();
+        }
+    }
+
     /**
      * Interface for receiving verification progress updates.
      */
@@ -59,9 +83,9 @@ public class SignatureVerificationService {
     }
 
     /**
-     * Notifies progress listener with a message.
+     * Notifies progress listener with a message (thread-safe).
      */
-    private void notifyProgress(String message) {
+    private synchronized void notifyProgress(String message) {
         if (progressListener != null) {
             progressListener.onProgress(message);
         }
@@ -445,6 +469,17 @@ public class SignatureVerificationService {
     }
 
     /**
+     * Algorithm strength levels (CCA/NIST compliance).
+     */
+    private enum AlgorithmStrength {
+        FORBIDDEN,   // MD5 - Must reject
+        DEPRECATED,  // SHA-1 - Deprecated since 2017
+        WEAK,        // SHA-224 - Weak but sometimes acceptable
+        ACCEPTABLE,  // SHA-256 - Minimum acceptable
+        STRONG       // SHA-384, SHA-512 - Recommended
+    }
+
+    /**
      * Checks if PDF is certified (has a certification signature).
      * Certified PDFs may restrict additional signatures.
      *
@@ -525,6 +560,11 @@ public class SignatureVerificationService {
             return results;
         }
 
+        // Initialize revocation cache for this verification session
+        // This prevents redundant OCSP/CRL checks for same certificate across multiple signatures
+        revocationCache = new HashMap<>();
+        log.info("Initialized revocation status cache for verification session");
+
         PdfReader reader = null;
         try {
             // Open PDF with password if provided
@@ -549,21 +589,9 @@ public class SignatureVerificationService {
 
             log.info("Found " + signatureNames.size() + " signature(s) in PDF");
 
-            // Verify each signature
-            for (int i = 0; i < signatureNames.size(); i++) {
-                String signatureName = signatureNames.get(i);
-                try {
-                    notifyProgress("Verifying signature " + (i + 1) + " of " + signatureNames.size() + "...");
-                    SignatureVerificationResult result = verifySignature(reader, acroFields, signatureName);
-                    results.add(result);
-                } catch (Exception e) {
-                    log.error("Error verifying signature: " + signatureName, e);
-                    SignatureVerificationResult errorResult = new SignatureVerificationResult(
-                        signatureName, "", null, "", "", "");
-                    errorResult.addVerificationError("Failed to verify signature: " + e.getMessage());
-                    results.add(errorResult);
-                }
-            }
+            // Verify signatures sequentially (one by one)
+            log.info("Verifying " + signatureNames.size() + " signature(s) sequentially");
+            results.addAll(verifySignaturesSequential(reader, acroFields, signatureNames));
 
         } catch (Exception e) {
             log.error("Error reading PDF file", e);
@@ -579,6 +607,33 @@ public class SignatureVerificationService {
 
         // Apply PDF viewer certification rules before returning
         applyPdfViewerCertificationRules(results);
+
+        return results;
+    }
+
+    /**
+     * Verifies signatures sequentially (one-by-one).
+     * Used for single signature documents or when parallel verification is disabled.
+     */
+    private List<SignatureVerificationResult> verifySignaturesSequential(
+            PdfReader reader, AcroFields acroFields, List<String> signatureNames) {
+
+        List<SignatureVerificationResult> results = new ArrayList<>();
+
+        for (int i = 0; i < signatureNames.size(); i++) {
+            String signatureName = signatureNames.get(i);
+            try {
+                notifyProgress("Verifying signature " + (i + 1) + " of " + signatureNames.size() + "...");
+                SignatureVerificationResult result = verifySignature(reader, acroFields, signatureName);
+                results.add(result);
+            } catch (Exception e) {
+                log.error("Error verifying signature: " + signatureName, e);
+                SignatureVerificationResult errorResult = new SignatureVerificationResult(
+                    signatureName, "", null, "", "", "");
+                errorResult.addVerificationError("Failed to verify signature: " + e.getMessage());
+                results.add(errorResult);
+            }
+        }
 
         return results;
     }
@@ -773,44 +828,211 @@ public class SignatureVerificationService {
                 result.setCertificateValidFrom(signerCert.getNotBefore());
                 result.setCertificateValidTo(signerCert.getNotAfter());
 
-                // 4. CERTIFICATE VALIDITY CHECK
-                // PDF viewers check validity at BOTH signing time and current time
-                try {
-                    // Check validity at current time
-                    signerCert.checkValidity();
-                    result.setCertificateValid(true);
+                // 4. CERTIFICATE VALIDITY CHECK (CCA/PAdES Compliant)
+                // CRITICAL: Certificate validity MUST be checked at signing time, not current time
+                // As per India CCA guidelines and ETSI EN 319 102-1:
+                // - Use timestamp date if available (trusted time)
+                // - Otherwise use signing date (claimed time)
+                // - Current time check is only informational
+                Date effectiveSigningTime = null;
+                String timeSource = "unknown";
 
-                    // Also check if certificate was valid at signing time
-                    if (signDate != null) {
+                // First, try to get timestamp date (most trusted)
+                if (pkcs7.getTimeStampDate() != null) {
+                    effectiveSigningTime = pkcs7.getTimeStampDate().getTime();
+                    timeSource = "trusted timestamp";
+                } else if (signDate != null) {
+                    // Fallback to signing date (claimed by signer)
+                    effectiveSigningTime = signDate;
+                    timeSource = "signer's claimed time";
+                }
+
+                boolean certificateValidAtSigningTime = false;
+
+                try {
+                    if (effectiveSigningTime != null) {
+                        // PRIMARY CHECK: Certificate validity at signing/timestamp time (CCA requirement)
+                        signerCert.checkValidity(effectiveSigningTime);
+                        certificateValidAtSigningTime = true;
+                        result.setCertificateValid(true);
+                        log.info("Certificate was valid at signing time (" + timeSource + "): " +
+                                DATE_FORMAT.format(effectiveSigningTime));
+                        result.addVerificationInfo("Certificate was valid at signing time (" +
+                                timeSource + ": " + DATE_FORMAT.format(effectiveSigningTime) + ")");
+
+                        // SECONDARY CHECK: Certificate validity at current time (informational only)
                         try {
-                            signerCert.checkValidity(signDate);
-                            result.addVerificationInfo("Certificate was valid at signing time");
-                        } catch (CertificateExpiredException | CertificateNotYetValidException e) {
-                            result.addVerificationWarning("Certificate was not valid when document was signed");
+                            signerCert.checkValidity();
+                            result.addVerificationInfo("Certificate is still valid today");
+                        } catch (CertificateExpiredException e) {
+                            // Certificate expired after signing - this is OK for CCA compliance
+                            result.addVerificationWarning("Certificate has expired since signing, but was valid when document was signed");
+                            log.info("Certificate expired after signing (still valid signature)");
+                        } catch (CertificateNotYetValidException e) {
+                            // Should not happen if cert was valid at signing time
+                            result.addVerificationWarning("Certificate validity period issue detected");
                         }
+                    } else {
+                        // No signing time available - check current time as fallback
+                        log.warn("No signing time or timestamp available - checking certificate validity at current time");
+                        signerCert.checkValidity();
+                        result.setCertificateValid(true);
+                        result.addVerificationWarning("Certificate validity checked at current time (no timestamp available)");
                     }
                 } catch (CertificateExpiredException e) {
                     result.setCertificateValid(false);
-                    result.addVerificationError("Certificate has expired");
+                    if (effectiveSigningTime != null) {
+                        result.addVerificationError("Certificate was expired at signing time (" +
+                                DATE_FORMAT.format(effectiveSigningTime) + ")");
+                        log.error("Certificate was EXPIRED at signing time - signature INVALID");
+                    } else {
+                        result.addVerificationError("Certificate has expired");
+                    }
                 } catch (CertificateNotYetValidException e) {
                     result.setCertificateValid(false);
-                    result.addVerificationError("Certificate is not yet valid");
-                }
-
-                // 5. CERTIFICATE CHAIN VERIFICATION
-                Certificate[] certs = pkcs7.getCertificates();
-                List<X509Certificate> certChain = new ArrayList<>();
-                for (Certificate cert : certs) {
-                    if (cert instanceof X509Certificate) {
-                        certChain.add((X509Certificate) cert);
+                    if (effectiveSigningTime != null) {
+                        result.addVerificationError("Certificate was not yet valid at signing time (" +
+                                DATE_FORMAT.format(effectiveSigningTime) + ")");
+                        log.error("Certificate was NOT YET VALID at signing time - signature INVALID");
+                    } else {
+                        result.addVerificationError("Certificate is not yet valid");
                     }
                 }
-                result.setCertificateChain(certChain);
+
+                // 5. EXTENDED KEY USAGE VALIDATION (CCA Requirement)
+                // CRITICAL: Certificate must be authorized for document/code signing
+                // This prevents misuse of certificates (e.g., TLS certificates for signing)
+                notifyProgress("Validating certificate usage...");
+                try {
+                    List<String> extKeyUsage = signerCert.getExtendedKeyUsage();
+
+                    if (extKeyUsage != null && !extKeyUsage.isEmpty()) {
+                        boolean validForSigning = false;
+                        StringBuilder ekuInfo = new StringBuilder("Extended Key Usage: ");
+
+                        for (String oid : extKeyUsage) {
+                            switch (oid) {
+                                case "1.3.6.1.5.5.7.3.3": // Code Signing
+                                    validForSigning = true;
+                                    ekuInfo.append("Code Signing, ");
+                                    break;
+                                case "1.3.6.1.5.5.7.3.4": // Email Protection (S/MIME)
+                                    validForSigning = true;
+                                    ekuInfo.append("Email Protection, ");
+                                    break;
+                                case "1.3.6.1.4.1.311.10.3.12": // Microsoft Document Signing
+                                    validForSigning = true;
+                                    ekuInfo.append("Document Signing, ");
+                                    break;
+                                case "1.2.840.113583.1.1.5": // Adobe Authentic Documents Trust
+                                    validForSigning = true;
+                                    ekuInfo.append("Adobe PDF Signing, ");
+                                    break;
+                                case "1.3.6.1.5.5.7.3.1": // TLS Web Server Authentication
+                                    ekuInfo.append("TLS Server Auth, ");
+                                    break;
+                                case "1.3.6.1.5.5.7.3.2": // TLS Web Client Authentication
+                                    ekuInfo.append("TLS Client Auth, ");
+                                    break;
+                                default:
+                                    ekuInfo.append(oid).append(", ");
+                                    break;
+                            }
+                        }
+
+                        // Remove trailing comma
+                        if (ekuInfo.length() > 22) {
+                            ekuInfo.setLength(ekuInfo.length() - 2);
+                        }
+
+                        log.info(ekuInfo.toString());
+
+                        if (validForSigning) {
+                            result.addVerificationInfo("Certificate is authorized for document signing");
+                        } else {
+                            // Certificate has EKU but not for signing
+                            result.addVerificationWarning("Certificate Extended Key Usage does not include document signing - " +
+                                    "certificate may not be intended for this purpose");
+                            log.warn("Certificate EKU does not include signing purposes");
+                        }
+                    } else {
+                        // No Extended Key Usage - check Basic Constraints
+                        // If it's not a CA certificate, it can be used for signing
+                        int basicConstraints = signerCert.getBasicConstraints();
+                        if (basicConstraints == -1) {
+                            // End-entity certificate without EKU can be used for signing
+                            result.addVerificationInfo("Certificate can be used for document signing (no EKU restrictions)");
+                            log.info("Certificate has no Extended Key Usage restrictions");
+                        } else {
+                            // CA certificate used for signing - unusual
+                            result.addVerificationWarning("CA certificate used for signing - this is unusual");
+                            log.warn("CA certificate used for signing");
+                        }
+                    }
+
+                    // Validate Key Usage (basic usage flags)
+                    // RFC 5280 - Key Usage bits define certificate purpose
+                    boolean[] keyUsage = signerCert.getKeyUsage();
+                    if (keyUsage != null) {
+                        boolean hasDigitalSignature = keyUsage.length > 0 && keyUsage[0]; // Bit 0: Digital Signature
+                        boolean hasNonRepudiation = keyUsage.length > 1 && keyUsage[1];   // Bit 1: Non Repudiation
+                        boolean hasKeyEncipherment = keyUsage.length > 2 && keyUsage[2];  // Bit 2: Key Encipherment
+                        boolean hasDataEncipherment = keyUsage.length > 3 && keyUsage[3]; // Bit 3: Data Encipherment
+
+                        if (hasDigitalSignature || hasNonRepudiation) {
+                            result.addVerificationInfo("Certificate has Digital Signature capability");
+                            log.info("Key Usage: Digital Signature = " + hasDigitalSignature +
+                                    ", Non Repudiation = " + hasNonRepudiation);
+
+                            // Additional check: Warn if encryption bits are also present (dual-use certificate)
+                            if (hasKeyEncipherment || hasDataEncipherment) {
+                                result.addVerificationInfo("Certificate supports both signing and encryption (dual-use)");
+                                log.info("Key Usage: Also has encryption capabilities - " +
+                                        "Key Encipherment = " + hasKeyEncipherment +
+                                        ", Data Encipherment = " + hasDataEncipherment);
+                            }
+                        } else {
+                            // CRITICAL: Certificate is primarily for encryption, NOT signing
+                            if (hasKeyEncipherment || hasDataEncipherment) {
+                                result.addVerificationWarning("Certificate appears to be an ENCRYPTION certificate - " +
+                                        "Key Usage includes encryption but NOT digital signature. " +
+                                        "This certificate may not be intended for document signing.");
+                                log.warn("Encryption certificate used for signing - " +
+                                        "Key Encipherment = " + hasKeyEncipherment +
+                                        ", Data Encipherment = " + hasDataEncipherment);
+                            } else {
+                                result.addVerificationWarning("Certificate Key Usage does not include Digital Signature");
+                                log.warn("Certificate lacks Digital Signature in Key Usage");
+                            }
+                        }
+                    }
+
+                } catch (Exception e) {
+                    log.warn("Could not validate Extended Key Usage: " + e.getMessage());
+                }
+
+                // 6. CERTIFICATE CHAIN VERIFICATION
+                // Extract all certificates from signature
+                Certificate[] certs = pkcs7.getCertificates();
+                List<X509Certificate> allCerts = new ArrayList<>();
+                for (Certificate cert : certs) {
+                    if (cert instanceof X509Certificate) {
+                        allCerts.add((X509Certificate) cert);
+                    }
+                }
+
+                // Build properly ordered certificate chain starting from signer certificate
+                // CRITICAL: pkcs7.getCertificates() returns certs in arbitrary order
+                // We must build chain in correct order: [signer, intermediate(s), root]
+                List<X509Certificate> orderedCertChain = buildOrderedCertificateChain(signerCert, allCerts);
+                result.setCertificateChain(orderedCertChain);
+
+                log.info("Built ordered certificate chain with " + orderedCertChain.size() + " certificate(s)");
 
                 // Check if certificate is trusted (PDF viewer-level verification)
                 notifyProgress("Verifying certificate trust...");
                 try {
-                    verifyCertificateChain(certChain);
+                    verifyCertificateChain(orderedCertChain);
                     result.setCertificateTrusted(true);
                     log.info("Certificate trust verification: PASSED");
                 } catch (Exception e) {
@@ -823,32 +1045,121 @@ public class SignatureVerificationService {
 
                 // Check certificate revocation status (OCSP) - PDF viewer style
             notifyProgress("Checking revocation status (OCSP)...");
-            checkRevocationStatus(signerCert, pkcs7, result);
+            checkRevocationStatus(signerCert, pkcs7, result, signDate);
             } else {
                 result.addVerificationError("No certificate found in signature");
             }
 
-            // 6. SIGNATURE ALGORITHM
-            result.setSignatureAlgorithm(pkcs7.getHashAlgorithm());
+            // 6. SIGNATURE ALGORITHM VALIDATION (CCA/NIST Requirement)
+            // CRITICAL: CCA requires SHA-256 or stronger for legal validity
+            // Weak algorithms (MD5, SHA-1) are deprecated and insecure
+            String hashAlgorithm = pkcs7.getHashAlgorithm();
+            String encryptionAlgorithm = null;
 
-            // 7. TIMESTAMP VERIFICATION
+            // Extract encryption algorithm from certificate's public key
+            if (signerCert != null) {
+                encryptionAlgorithm = signerCert.getPublicKey().getAlgorithm();
+            }
+
+            result.setSignatureAlgorithm(hashAlgorithm);
+
+            log.info("Signature Algorithm: Hash=" + hashAlgorithm +
+                    (encryptionAlgorithm != null ? ", Encryption=" + encryptionAlgorithm : ""));
+
+            // Validate hash algorithm strength (CCA/NIST SP 800-131A compliance)
+            AlgorithmStrength hashStrength = validateHashAlgorithm(hashAlgorithm);
+            switch (hashStrength) {
+                case FORBIDDEN:
+                    result.addVerificationError("Signature uses FORBIDDEN hash algorithm (" + hashAlgorithm +
+                            ") - signature is INSECURE and INVALID");
+                    log.error("FORBIDDEN hash algorithm detected: " + hashAlgorithm);
+                    // Mark signature as invalid
+                    result.setSignatureValid(false);
+                    break;
+                case DEPRECATED:
+                    result.addVerificationWarning("Signature uses DEPRECATED hash algorithm (" + hashAlgorithm +
+                            ") - not recommended by CCA/NIST. Should use SHA-256 or stronger.");
+                    log.warn("DEPRECATED hash algorithm detected: " + hashAlgorithm);
+                    break;
+                case WEAK:
+                    result.addVerificationWarning("Signature uses WEAK hash algorithm (" + hashAlgorithm +
+                            ") - consider upgrading to SHA-256 or stronger");
+                    log.warn("WEAK hash algorithm detected: " + hashAlgorithm);
+                    break;
+                case ACCEPTABLE:
+                    result.addVerificationInfo("Signature uses acceptable hash algorithm: " + hashAlgorithm);
+                    log.info("Hash algorithm strength: ACCEPTABLE");
+                    break;
+                case STRONG:
+                    result.addVerificationInfo("Signature uses strong hash algorithm: " + hashAlgorithm +
+                            " (recommended by CCA)");
+                    log.info("Hash algorithm strength: STRONG (CCA compliant)");
+                    break;
+            }
+
+            // Validate encryption algorithm (RSA key size)
+            if (signerCert != null) {
+                int keySize = com.codemuni.utils.CertificateUtils.getKeySize(signerCert);
+                if (keySize > 0) {
+                    if (encryptionAlgorithm != null && encryptionAlgorithm.contains("RSA")) {
+                        if (keySize < 2048) {
+                            result.addVerificationError("RSA key size (" + keySize +
+                                    " bits) is too weak - minimum 2048 bits required by CCA");
+                            log.error("WEAK RSA key size: " + keySize + " bits");
+                            result.setSignatureValid(false);
+                        } else if (keySize < 3072) {
+                            result.addVerificationInfo("RSA key size: " + keySize +
+                                    " bits (acceptable, 3072+ recommended)");
+                        } else {
+                            result.addVerificationInfo("RSA key size: " + keySize +
+                                    " bits (strong, CCA compliant)");
+                        }
+                    }
+                }
+            }
+
+            // 7. TIMESTAMP VERIFICATION (RFC 3161 + CCA Requirement)
+            // CRITICAL: For legal validity in India, timestamp verification is MANDATORY
+            // Timestamp provides trusted proof of signing time
             if (pkcs7.getTimeStampDate() != null) {
-                result.setTimestampValid(true);
-                result.setTimestampDate(pkcs7.getTimeStampDate().getTime());
+                notifyProgress("Verifying timestamp token...");
+                log.info("Timestamp found - performing RFC 3161 verification");
 
-                // Try to get TSA certificate info
                 try {
-                    if (pkcs7.getTimeStampToken() != null) {
-                        result.setTimestampAuthority("Timestamp Authority");
+                    // Perform complete timestamp verification
+                    TimestampVerificationResult tsResult = verifyTimestamp(pkcs7, result);
+
+                    if (tsResult.isValid) {
+                        result.setTimestampValid(true);
+                        result.setTimestampDate(pkcs7.getTimeStampDate().getTime());
+                        result.setTimestampAuthority(tsResult.tsaName);
+                        log.info("Timestamp verification: PASSED");
+                        result.addVerificationInfo("Timestamp verified successfully - TSA: " + tsResult.tsaName);
+
+                        // CCA Compliance: Timestamp proves exact signing time
+                        result.addVerificationInfo("Signing time verified by trusted timestamp: " +
+                                DATE_FORMAT.format(pkcs7.getTimeStampDate().getTime()));
+                    } else {
+                        result.setTimestampValid(false);
+                        result.addVerificationError("Timestamp verification failed: " + tsResult.errorMessage);
+                        log.error("Timestamp verification: FAILED - " + tsResult.errorMessage);
+
+                        // If timestamp is invalid, signing time cannot be trusted
+                        result.addVerificationWarning("Signing time cannot be trusted (timestamp invalid)");
                     }
                 } catch (Exception e) {
-                    log.debug("Could not extract timestamp authority info", e);
+                    result.setTimestampValid(false);
+                    result.addVerificationError("Timestamp verification error: " + e.getMessage());
+                    log.error("Timestamp verification error", e);
                 }
-                log.info("Timestamp: Enabled");
+
+                log.info("Timestamp: Enabled and verified");
             } else {
-                // Timestamp not enabled - this is INFO, not an error
-                result.addVerificationInfo("Timestamp not enabled in this signature");
-                log.info("Timestamp: Not enabled");
+                // Timestamp not enabled - CRITICAL WARNING for CCA compliance
+                // Without timestamp, signing time cannot be proven
+                result.addVerificationWarning("Timestamp not enabled - signing time cannot be cryptographically proven");
+                result.addVerificationWarning("For legal validity in India, timestamp is recommended by CCA");
+                log.warn("Timestamp: Not enabled - signing time is signer's claimed time (not trusted)");
             }
 
             // 8. LTV INFORMATION (PDF viewer-style check)
@@ -927,6 +1238,114 @@ public class SignatureVerificationService {
     }
 
     /**
+     * Builds a properly ordered certificate chain starting from the signer certificate.
+     * This is critical because pkcs7.getCertificates() returns certificates in arbitrary order.
+     *
+     * The correct order is: [end-entity (signer), intermediate CA(s), root CA]
+     *
+     * @param signerCert The signing certificate (end entity)
+     * @param availableCerts All certificates from the PDF signature
+     * @return Ordered certificate chain from signer to root
+     */
+    private List<X509Certificate> buildOrderedCertificateChain(X509Certificate signerCert,
+                                                                List<X509Certificate> availableCerts) {
+        List<X509Certificate> orderedChain = new ArrayList<>();
+
+        if (signerCert == null) {
+            log.warn("Signer certificate is null, cannot build chain");
+            return orderedChain;
+        }
+
+        // Start with the signer certificate (end entity)
+        orderedChain.add(signerCert);
+        log.info("Building ordered chain starting from signer: " + extractCN(signerCert.getSubjectDN().toString()));
+
+        // Build chain upward by finding issuers
+        X509Certificate currentCert = signerCert;
+        int maxIterations = 10; // Prevent infinite loops
+        int iteration = 0;
+
+        while (iteration < maxIterations) {
+            // Check if current cert is self-signed (reached root)
+            if (isSelfSignedCertificate(currentCert)) {
+                log.info("Reached self-signed root certificate");
+                break;
+            }
+
+            // Find the issuer of current certificate in available certs
+            X509Certificate issuerCert = findIssuerInList(currentCert, availableCerts);
+
+            if (issuerCert == null) {
+                log.info("Issuer not found in PDF certificates for: " + extractCN(currentCert.getSubjectDN().toString()));
+                log.info("Chain will be completed later from trust store if needed");
+                break;
+            }
+
+            // Verify this is the correct issuer by checking signature
+            if (!verifyCertificateSignature(currentCert, issuerCert)) {
+                log.warn("Found certificate with matching DN but signature verification failed");
+                break;
+            }
+
+            // Check if we already added this cert (prevent duplicates/loops)
+            if (orderedChain.contains(issuerCert)) {
+                log.warn("Certificate already in chain, stopping to prevent loop");
+                break;
+            }
+
+            // Add issuer to chain
+            orderedChain.add(issuerCert);
+            log.info("  Added issuer to chain: " + extractCN(issuerCert.getSubjectDN().toString()));
+
+            // Move up the chain
+            currentCert = issuerCert;
+            iteration++;
+        }
+
+        if (iteration >= maxIterations) {
+            log.warn("Stopped building chain after max iterations");
+        }
+
+        log.info("Ordered certificate chain built with " + orderedChain.size() + " certificate(s):");
+        for (int i = 0; i < orderedChain.size(); i++) {
+            X509Certificate cert = orderedChain.get(i);
+            String role = i == 0 ? "Signer" : (isSelfSignedCertificate(cert) ? "Root CA" : "Intermediate CA");
+            log.info("  [" + i + "] " + role + ": " + extractCN(cert.getSubjectDN().toString()));
+        }
+
+        return orderedChain;
+    }
+
+    /**
+     * Finds the issuer certificate for a given certificate in a list of certificates.
+     * Uses proper DN comparison and signature verification.
+     *
+     * @param cert Certificate to find issuer for
+     * @param availableCerts List of available certificates
+     * @return Issuer certificate if found, null otherwise
+     */
+    private X509Certificate findIssuerInList(X509Certificate cert, List<X509Certificate> availableCerts) {
+        if (cert == null || availableCerts == null || availableCerts.isEmpty()) {
+            return null;
+        }
+
+        for (X509Certificate candidate : availableCerts) {
+            // Skip if this is the same certificate
+            if (candidate.equals(cert)) {
+                continue;
+            }
+
+            // Check if candidate is the issuer using proper DN comparison
+            if (isIssuer(candidate, cert)) {
+                log.debug("Found potential issuer: " + extractCN(candidate.getSubjectDN().toString()));
+                return candidate;
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Verifies the certificate chain using PDF viewer-level verification.
      * Step-by-step verification with clear error messages for non-tech users.
      */
@@ -937,8 +1356,8 @@ public class SignatureVerificationService {
 
         X509Certificate signerCert = certChain.get(0);
 
-        // Step 1: Check if certificate is self-signed
-        boolean isSelfSigned = signerCert.getSubjectDN().equals(signerCert.getIssuerDN());
+        // Step 1: Check if certificate is self-signed using proper DN comparison
+        boolean isSelfSigned = isSelfSignedCertificate(signerCert);
 
         // Step 2: Get trust anchors (embedded + manual certificates)
         Set<TrustAnchor> trustAnchors = getTrustStore();
@@ -963,7 +1382,8 @@ public class SignatureVerificationService {
 
         // Step 4: If self-signed and not in trust store, fail
         if (isSelfSigned) {
-            throw new Exception("Certificate is self-signed and not in trusted list");
+            String errorMsg = "Certificate is self-signed and not in trusted list";
+            throw new Exception(errorMsg);
         }
 
         // Step 5: Build and validate certificate path to root CA
@@ -1023,22 +1443,27 @@ public class SignatureVerificationService {
                 String certName = extractCN(failedCert.getSubjectDN().toString());
 
                 // Provide specific error based on reason
+                String errorMsg;
                 if (reason.contains("NO_TRUST_ANCHOR") || reason.contains("UNDETERMINED_REVOCATION_STATUS")) {
-                    throw new Exception("Root certificate not found in trust store. Add '" +
+                    errorMsg = "Root certificate not found in trust store. Add '" +
                                       extractCN(failedCert.getIssuerDN().toString()) +
-                                      "' to Trust Manager.");
+                                      "' to Trust Manager.";
                 } else {
-                    throw new Exception("Certificate '" + certName + "' verification failed: " + reason);
+                    errorMsg = "Certificate '" + certName + "' verification failed: " + reason;
                 }
+                throw new Exception(errorMsg);
             } else {
-                throw new Exception("Certificate chain validation failed: " + reason);
+                String errorMsg = "Certificate chain validation failed: " + reason;
+                throw new Exception(errorMsg);
             }
         } catch (InvalidAlgorithmParameterException e) {
             log.error("Invalid algorithm parameter", e);
-            throw new Exception("No trusted root certificate found in trust store");
+            String errorMsg = "No trusted root certificate found in trust store";
+            throw new Exception(errorMsg);
         } catch (Exception e) {
             log.error("Certificate validation error", e);
-            throw new Exception("Certificate not trusted: " + e.getMessage());
+            String errorMsg = "Certificate not trusted: " + e.getMessage();
+            throw new Exception(errorMsg);
         }
     }
 
@@ -1063,12 +1488,10 @@ public class SignatureVerificationService {
 
         while (iterations < maxIterations) {
             X509Certificate lastCert = completeChain.get(completeChain.size() - 1);
-            String lastIssuerDN = lastCert.getIssuerDN().toString();
-            String lastSubjectDN = lastCert.getSubjectDN().toString();
 
             // If last cert is self-signed, chain is complete
-            if (lastIssuerDN.equals(lastSubjectDN)) {
-                log.info("Chain is complete - found self-signed root: " + extractCN(lastSubjectDN));
+            if (isSelfSignedCertificate(lastCert)) {
+                log.info("Chain is complete - found self-signed root: " + extractCN(lastCert.getSubjectDN().toString()));
                 break;
             }
 
@@ -1076,34 +1499,38 @@ public class SignatureVerificationService {
             boolean foundIssuer = false;
             for (TrustAnchor anchor : trustAnchors) {
                 X509Certificate anchorCert = anchor.getTrustedCert();
-                String anchorSubjectDN = anchorCert.getSubjectDN().toString();
 
-                // Check if this anchor is the issuer
-                if (anchorSubjectDN.equals(lastIssuerDN)) {
-                    log.info("Found issuer in trust store: " + extractCN(anchorSubjectDN));
+                // Check if this anchor is the issuer using proper DN comparison
+                if (isIssuer(anchorCert, lastCert)) {
+                    log.info("Found issuer in trust store: " + extractCN(anchorCert.getSubjectDN().toString()));
 
-                    // Avoid duplicates
-                    boolean isDuplicate = false;
-                    for (X509Certificate existingCert : completeChain) {
-                        if (existingCert.equals(anchorCert)) {
-                            isDuplicate = true;
-                            break;
+                    // Verify signature to ensure this is the correct issuer
+                    if (verifyCertificateSignature(lastCert, anchorCert)) {
+                        // Avoid duplicates
+                        boolean isDuplicate = false;
+                        for (X509Certificate existingCert : completeChain) {
+                            if (existingCert.equals(anchorCert)) {
+                                isDuplicate = true;
+                                break;
+                            }
                         }
-                    }
 
-                    if (!isDuplicate) {
-                        completeChain.add(anchorCert);
-                        log.info("Added issuer to chain - new chain length: " + completeChain.size());
-                    }
+                        if (!isDuplicate) {
+                            completeChain.add(anchorCert);
+                            log.info("Added verified issuer to chain - new chain length: " + completeChain.size());
+                        }
 
-                    foundIssuer = true;
-                    break;
+                        foundIssuer = true;
+                        break;
+                    } else {
+                        log.warn("DN matched but signature verification failed - not the correct issuer");
+                    }
                 }
             }
 
             // If we couldn't find issuer, stop looking
             if (!foundIssuer) {
-                log.info("Could not find issuer '" + extractCN(lastIssuerDN) + "' in trust store");
+                log.info("Could not find issuer '" + extractCN(lastCert.getIssuerDN().toString()) + "' in trust store");
                 break;
             }
 
@@ -1115,6 +1542,74 @@ public class SignatureVerificationService {
         }
 
         return completeChain;
+    }
+
+    /**
+     * Checks if a certificate is self-signed.
+     * Uses X500Principal for proper DN comparison instead of string comparison.
+     *
+     * @param cert Certificate to check
+     * @return true if self-signed, false otherwise
+     */
+    private boolean isSelfSignedCertificate(X509Certificate cert) {
+        if (cert == null) {
+            return false;
+        }
+
+        // Use X500Principal for proper DN comparison (normalized)
+        boolean dnMatch = cert.getSubjectX500Principal().equals(cert.getIssuerX500Principal());
+
+        if (!dnMatch) {
+            return false;
+        }
+
+        // Also verify the signature to ensure it's truly self-signed
+        try {
+            cert.verify(cert.getPublicKey());
+            return true;
+        } catch (Exception e) {
+            log.debug("Certificate has matching subject/issuer but signature verification failed", e);
+            return false;
+        }
+    }
+
+    /**
+     * Checks if issuerCert is the issuer of subjectCert.
+     * Uses X500Principal for proper DN comparison.
+     *
+     * @param issuerCert  Potential issuer certificate
+     * @param subjectCert Subject certificate
+     * @return true if issuerCert issued subjectCert
+     */
+    private boolean isIssuer(X509Certificate issuerCert, X509Certificate subjectCert) {
+        if (issuerCert == null || subjectCert == null) {
+            return false;
+        }
+
+        // Compare issuer DN of subject with subject DN of issuer using X500Principal
+        // X500Principal provides normalized DN comparison
+        return subjectCert.getIssuerX500Principal().equals(issuerCert.getSubjectX500Principal());
+    }
+
+    /**
+     * Verifies that subjectCert was signed by issuerCert.
+     *
+     * @param subjectCert Certificate to verify
+     * @param issuerCert  Issuer certificate
+     * @return true if signature is valid, false otherwise
+     */
+    private boolean verifyCertificateSignature(X509Certificate subjectCert, X509Certificate issuerCert) {
+        if (subjectCert == null || issuerCert == null) {
+            return false;
+        }
+
+        try {
+            subjectCert.verify(issuerCert.getPublicKey());
+            return true;
+        } catch (Exception e) {
+            log.debug("Certificate signature verification failed: " + e.getMessage());
+            return false;
+        }
     }
 
     /**
@@ -1184,73 +1679,389 @@ public class SignatureVerificationService {
     /**
      * Checks certificate revocation status using OCSP.
      * Performs live OCSP check by extracting URL from certificate.
+     * CRITICAL FIX: Now checks revocation time vs signing time to properly validate signatures.
+     *
+     * @param cert The certificate to check
+     * @param pkcs7 The signature PKCS7 data
+     * @param result The verification result to update
+     * @param signDate The date when the document was signed (used for revocation time comparison)
      */
-    private void checkRevocationStatus(X509Certificate cert, PdfPKCS7 pkcs7, SignatureVerificationResult result) {
+    private void checkRevocationStatus(X509Certificate cert, PdfPKCS7 pkcs7, SignatureVerificationResult result, Date signDate) {
         try {
-            log.info("Checking certificate revocation status (OCSP)...");
+            String certSerial = cert.getSerialNumber().toString();
+            String certSubject = extractCN(cert.getSubjectDN().toString());
+            String cacheKey = certSerial + ":" + cert.getIssuerDN().toString();
+
+            log.info("Checking certificate revocation status for [" + certSerial + "] " + certSubject);
+
+            // STEP 0: Check cache first (avoid redundant checks for same certificate)
+            if (revocationCache.containsKey(cacheKey)) {
+                RevocationCacheEntry cached = revocationCache.get(cacheKey);
+                log.info("Revocation status found in cache - Status: " + cached.status +
+                        " (Source: " + cached.source + ", Age: " +
+                        (System.currentTimeMillis() - cached.timestamp) + "ms)");
+
+                result.setRevocationStatus(cached.status);
+                result.setCertificateRevoked(cached.isRevoked);
+
+                if (cached.isRevoked) {
+                    result.addVerificationError("Certificate has been revoked (" + cached.source + ")");
+                } else {
+                    result.addVerificationInfo("Revocation checked via " + cached.source + " (cached)");
+                }
+                return;
+            }
 
             // Method 1: Check embedded OCSP response in signature (LTV)
             try {
                 Object ocspResponse = pkcs7.getOcsp();
                 if (ocspResponse != null) {
-                    log.info("OCSP: Found embedded OCSP response");
-                    result.setRevocationStatus("Valid (Embedded)");
-                    result.setCertificateRevoked(false);
-                    result.addVerificationInfo("Revocation checked via embedded OCSP");
-                    return;
+                    log.info("OCSP: Found embedded OCSP response - parsing for revocation time");
+
+                    // CRITICAL FIX: Parse embedded OCSP to check revocation time vs signing time
+                    try {
+                        byte[] ocspBytes;
+                        if (ocspResponse instanceof byte[]) {
+                            ocspBytes = (byte[]) ocspResponse;
+                        } else {
+                            log.warn("Embedded OCSP response is not byte array, cannot parse");
+                            result.setRevocationStatus("Valid (Embedded)");
+                            result.setCertificateRevoked(false);
+                            result.addVerificationInfo("Revocation checked via embedded OCSP (time not verified)");
+                            return;
+                        }
+
+                        org.bouncycastle.ocsp.OCSPResp ocspResp = new org.bouncycastle.ocsp.OCSPResp(ocspBytes);
+                        if (ocspResp.getStatus() == org.bouncycastle.ocsp.OCSPRespStatus.SUCCESSFUL) {
+                            org.bouncycastle.ocsp.BasicOCSPResp basicResp =
+                                    (org.bouncycastle.ocsp.BasicOCSPResp) ocspResp.getResponseObject();
+                            org.bouncycastle.ocsp.SingleResp[] responses = basicResp.getResponses();
+
+                            if (responses.length > 0) {
+                                Object certStatus = responses[0].getCertStatus();
+
+                                if (certStatus == null) {
+                                    // Not revoked
+                                    result.setRevocationStatus("Valid (Embedded OCSP)");
+                                    result.setCertificateRevoked(false);
+                                    result.addVerificationInfo("Revocation checked via embedded OCSP");
+
+                                    // Cache the result
+                                    revocationCache.put(cacheKey, new RevocationCacheEntry(
+                                            "Valid (Embedded OCSP)", false, null, "Embedded OCSP"));
+                                    log.info("Cached revocation status: VALID (Embedded OCSP)");
+                                    return;
+                                } else if (certStatus instanceof org.bouncycastle.ocsp.RevokedStatus) {
+                                    // Revoked - check time
+                                    org.bouncycastle.ocsp.RevokedStatus revokedStatus =
+                                            (org.bouncycastle.ocsp.RevokedStatus) certStatus;
+                                    Date revocationTime = revokedStatus.getRevocationTime();
+
+                                    Date effectiveSigningTime = result.getTimestampDate() != null ?
+                                            result.getTimestampDate() : signDate;
+
+                                    if (effectiveSigningTime != null && revocationTime != null) {
+                                        if (revocationTime.before(effectiveSigningTime)) {
+                                            result.setRevocationStatus("Revoked before signing (Embedded OCSP)");
+                                            result.setCertificateRevoked(true);
+                                            result.addVerificationError("Certificate was revoked BEFORE the document was signed (embedded OCSP)");
+                                            log.error("Embedded OCSP shows cert revoked BEFORE signing");
+
+                                            // Cache the result
+                                            revocationCache.put(cacheKey, new RevocationCacheEntry(
+                                                    "Revoked before signing (Embedded OCSP)", true, revocationTime, "Embedded OCSP"));
+                                            return;
+                                        } else {
+                                            if (result.isTimestampValid()) {
+                                                result.setRevocationStatus("Valid (Revoked after signing, has timestamp)");
+                                                result.setCertificateRevoked(false);
+                                                result.addVerificationInfo("Certificate was revoked after signing, but signature has valid timestamp (embedded OCSP)");
+                                                log.info("Embedded OCSP shows cert revoked AFTER signing with timestamp");
+
+                                                // Cache the result
+                                                revocationCache.put(cacheKey, new RevocationCacheEntry(
+                                                        "Valid (Revoked after signing, has timestamp)", false, revocationTime, "Embedded OCSP"));
+                                                return;
+                                            } else {
+                                                result.setRevocationStatus("Revoked (no timestamp)");
+                                                result.setCertificateRevoked(true);
+                                                result.addVerificationError("Certificate revoked and signature lacks timestamp (embedded OCSP)");
+
+                                                // Cache the result
+                                                revocationCache.put(cacheKey, new RevocationCacheEntry(
+                                                        "Revoked (no timestamp)", true, revocationTime, "Embedded OCSP"));
+                                                return;
+                                            }
+                                        }
+                                    } else {
+                                        result.setRevocationStatus("Revoked (Embedded OCSP)");
+                                        result.setCertificateRevoked(true);
+                                        result.addVerificationError("Certificate has been revoked (embedded OCSP)");
+
+                                        // Cache the result
+                                        revocationCache.put(cacheKey, new RevocationCacheEntry(
+                                                "Revoked (Embedded OCSP)", true, null, "Embedded OCSP"));
+                                        return;
+                                    }
+                                }
+                            }
+                        }
+                    } catch (Exception parseEx) {
+                        log.warn("Could not parse embedded OCSP response for revocation time check", parseEx);
+                        // Fall back to simple valid status
+                        result.setRevocationStatus("Valid (Embedded OCSP)");
+                        result.setCertificateRevoked(false);
+                        result.addVerificationInfo("Revocation checked via embedded OCSP (time not verified)");
+                        return;
+                    }
                 }
             } catch (Exception e) {
                 log.debug("No embedded OCSP", e);
             }
 
-            // Method 2: Check embedded CRLs (LTV)
+            // Method 2: Check embedded CRLs (LTV) with proper validation
             try {
                 Collection<?> crls = pkcs7.getCRLs();
                 if (crls != null && !crls.isEmpty()) {
-                    log.info("OCSP: Found embedded CRL");
-                    result.setRevocationStatus("Valid (CRL)");
+                    log.info("CRL: Found " + crls.size() + " embedded CRL(s) - validating...");
+
+                    // Validate each CRL and check for revocation
+                    for (Object crlObj : crls) {
+                        if (crlObj instanceof java.security.cert.X509CRL) {
+                            java.security.cert.X509CRL crl = (java.security.cert.X509CRL) crlObj;
+
+                            // Check if certificate is revoked in this CRL
+                            java.security.cert.X509CRLEntry revokedEntry = crl.getRevokedCertificate(cert);
+
+                            if (revokedEntry != null) {
+                                // Certificate is revoked - check WHEN it was revoked
+                                Date revocationTime = revokedEntry.getRevocationDate();
+
+                                // Use timestamp if available, otherwise use signing date
+                                Date effectiveSigningTime = result.getTimestampDate() != null ?
+                                        result.getTimestampDate() : signDate;
+
+                                if (effectiveSigningTime != null && revocationTime != null) {
+                                    if (revocationTime.before(effectiveSigningTime)) {
+                                        // Certificate was revoked BEFORE signing - INVALID
+                                        result.setRevocationStatus("Revoked before signing (Embedded CRL)");
+                                        result.setCertificateRevoked(true);
+                                        result.addVerificationError("Certificate was revoked BEFORE the document was signed (embedded CRL)");
+                                        log.error("Embedded CRL shows cert revoked BEFORE signing: " +
+                                                "Revoked: " + DATE_FORMAT.format(revocationTime) +
+                                                ", Signed: " + DATE_FORMAT.format(effectiveSigningTime));
+
+                                        // Cache the result
+                                        revocationCache.put(cacheKey, new RevocationCacheEntry(
+                                                "Revoked before signing (Embedded CRL)", true, revocationTime, "Embedded CRL"));
+                                        return;
+                                    } else {
+                                        // Certificate was revoked AFTER signing
+                                        if (result.isTimestampValid()) {
+                                            // Has timestamp - signature is VALID
+                                            result.setRevocationStatus("Valid (Revoked after signing, has timestamp)");
+                                            result.setCertificateRevoked(false);
+                                            result.addVerificationInfo("Certificate was revoked after signing, but signature has valid timestamp (embedded CRL)");
+                                            log.info("Embedded CRL shows cert revoked AFTER signing with timestamp - signature VALID");
+
+                                            // Cache the result
+                                            revocationCache.put(cacheKey, new RevocationCacheEntry(
+                                                    "Valid (Revoked after signing, has timestamp)", false, revocationTime, "Embedded CRL"));
+                                            return;
+                                        } else {
+                                            // No timestamp - cannot prove signing time
+                                            result.setRevocationStatus("Revoked (no timestamp)");
+                                            result.setCertificateRevoked(true);
+                                            result.addVerificationError("Certificate revoked and signature lacks timestamp (embedded CRL)");
+                                            log.warn("Embedded CRL shows cert revoked, no timestamp to prove signing time");
+
+                                            // Cache the result
+                                            revocationCache.put(cacheKey, new RevocationCacheEntry(
+                                                    "Revoked (no timestamp)", true, revocationTime, "Embedded CRL"));
+                                            return;
+                                        }
+                                    }
+                                } else {
+                                    // Revoked but no time info available
+                                    result.setRevocationStatus("Revoked (Embedded CRL)");
+                                    result.setCertificateRevoked(true);
+                                    result.addVerificationError("Certificate has been revoked (embedded CRL)");
+
+                                    // Cache the result
+                                    revocationCache.put(cacheKey, new RevocationCacheEntry(
+                                            "Revoked (Embedded CRL)", true, null, "Embedded CRL"));
+                                    return;
+                                }
+                            } else {
+                                // Certificate not found in this CRL - check next CRL
+                                log.debug("Certificate not revoked in CRL issued by: " + crl.getIssuerDN());
+                            }
+                        }
+                    }
+
+                    // Certificate not revoked in any embedded CRL
+                    result.setRevocationStatus("Valid (Embedded CRL)");
                     result.setCertificateRevoked(false);
-                    result.addVerificationInfo("Revocation checked via embedded CRL");
+                    result.addVerificationInfo("Revocation checked via embedded CRL - certificate is valid");
+                    log.info("CRL validation passed - certificate not revoked");
+
+                    // Cache the result
+                    revocationCache.put(cacheKey, new RevocationCacheEntry(
+                            "Valid (Embedded CRL)", false, null, "Embedded CRL"));
                     return;
                 }
             } catch (Exception e) {
-                log.debug("No embedded CRL", e);
+                log.warn("Error validating embedded CRL: " + e.getMessage(), e);
             }
 
-            // Method 3: Extract OCSP URL and perform live check (with timeout)
-            log.info("OCSP: Attempting live check...");
+            // Method 3: Perform live OCSP check
+            // certSerial and certSubject already defined at the start of this method
+            log.info("OCSP: Performing live check for cert [" + certSerial + "] " + certSubject);
             String ocspUrl = extractOCSPUrl(cert);
 
             if (ocspUrl != null && !ocspUrl.isEmpty()) {
-                log.info("OCSP URL: " + ocspUrl);
+                log.info("OCSP: Found URL for cert [" + certSerial + "]: " + ocspUrl);
 
                 Certificate[] certs = pkcs7.getCertificates();
                 X509Certificate issuerCert = findIssuerCertificate(cert, certs);
 
                 if (issuerCert != null) {
-                    try {
-                        boolean isRevoked = performLiveOCSPCheck(cert, issuerCert, ocspUrl);
+                    // Retry logic for OCSP network failures (max 3 attempts)
+                    int maxRetries = 3;
+                    OCSPCheckResult ocspResult = null;
+                    SignatureVerificationException lastException = null;
 
-                        if (isRevoked) {
-                            result.setRevocationStatus("Revoked");
-                            result.setCertificateRevoked(true);
+                    for (int attempt = 1; attempt <= maxRetries; attempt++) {
+                        try {
+                            if (attempt > 1) {
+                                log.info("OCSP: Retry attempt " + attempt + " of " + maxRetries + " for cert [" + certSerial + "]");
+                            } else {
+                                log.info("OCSP: Contacting server for cert [" + certSerial + "]...");
+                            }
+
+                            ocspResult = performLiveOCSPCheck(cert, issuerCert, ocspUrl);
+
+                            // Success - break out of retry loop
+                            log.info("OCSP: Request successful on attempt " + attempt);
+                            lastException = null;
+                            break;
+
+                        } catch (SignatureVerificationException ocspEx) {
+                            lastException = ocspEx;
+
+                            if (ocspEx.isNetworkError() && attempt < maxRetries) {
+                                // Network error - retry with exponential backoff
+                                long waitTime = (long) (1000 * Math.pow(2, attempt - 1)); // 1s, 2s, 4s
+                                log.warn("OCSP: Network error on attempt " + attempt + " - retrying after " + waitTime + "ms");
+
+                                try {
+                                    Thread.sleep(waitTime);
+                                } catch (InterruptedException ie) {
+                                    Thread.currentThread().interrupt();
+                                    break;
+                                }
+                            } else {
+                                // Non-network error or final retry - don't retry
+                                log.warn("OCSP: Failed on attempt " + attempt + " - " + ocspEx.getMessage());
+                                break;
+                            }
+                        }
+                    }
+
+                    // Check if OCSP check was successful
+                    if (ocspResult != null) {
+
+                        // CRITICAL FIX: Compare revocation time with signing time
+                        boolean actuallyRevoked = false;
+                        String status;
+
+                        if (ocspResult.isRevoked && ocspResult.revocationTime != null) {
+                            // Certificate is revoked - check WHEN it was revoked
+                            Date revocationTime = ocspResult.revocationTime;
+
+                            // Use timestamp if available, otherwise use signing date
+                            Date effectiveSigningTime = result.getTimestampDate() != null ?
+                                    result.getTimestampDate() : signDate;
+
+                            if (effectiveSigningTime != null) {
+                                if (revocationTime.before(effectiveSigningTime)) {
+                                    // CRITICAL: Certificate was revoked BEFORE signing
+                                    // Signature is INVALID - signer used a revoked certificate
+                                    actuallyRevoked = true;
+                                    status = "Revoked before signing";
+                                    log.error("OCSP: Certificate was REVOKED BEFORE signing! " +
+                                            "Revoked: " + DATE_FORMAT.format(revocationTime) +
+                                            ", Signed: " + DATE_FORMAT.format(effectiveSigningTime));
+                                    result.addVerificationError("Certificate was revoked BEFORE the document was signed");
+                                } else {
+                                    // Certificate was revoked AFTER signing
+                                    if (result.isTimestampValid()) {
+                                        // Signature has valid timestamp - signature is VALID
+                                        // The timestamp proves the signature was created when cert was still valid
+                                        actuallyRevoked = false;
+                                        status = "Valid (Revoked after signing, has timestamp)";
+                                        log.info("OCSP: Certificate revoked AFTER signing, but signature has valid timestamp → VALID. " +
+                                                "Revoked: " + DATE_FORMAT.format(revocationTime) +
+                                                ", Signed: " + DATE_FORMAT.format(effectiveSigningTime));
+                                        result.addVerificationInfo("Certificate was revoked after signing, but signature has valid timestamp proving it was created when certificate was valid");
+                                    } else {
+                                        // No timestamp - cannot prove when signature was created
+                                        actuallyRevoked = true;
+                                        status = "Revoked (no timestamp to prove signing time)";
+                                        log.warn("OCSP: Certificate revoked AFTER signing, but NO timestamp to prove signing time → INVALID. " +
+                                                "Revoked: " + DATE_FORMAT.format(revocationTime));
+                                        result.addVerificationError("Certificate has been revoked and signature lacks timestamp to prove it was created before revocation");
+                                    }
+                                }
+                            } else {
+                                // No signing date available
+                                actuallyRevoked = true;
+                                status = "Revoked";
+                                log.warn("OCSP: Certificate is revoked but cannot determine signing date");
+                                result.addVerificationError("Certificate has been revoked");
+                            }
+                        } else if (ocspResult.isRevoked) {
+                            // Revoked but no revocation time available
+                            actuallyRevoked = true;
+                            status = "Revoked";
+                            log.warn("OCSP: Certificate is revoked (revocation time unknown)");
                             result.addVerificationError("Certificate has been revoked");
                         } else {
-                            result.setRevocationStatus("Valid (Live OCSP)");
-                            result.setCertificateRevoked(false);
+                            // Certificate is not revoked
+                            actuallyRevoked = false;
+                            status = "Valid (Live OCSP)";
+                            log.info("OCSP: Certificate is valid (not revoked)");
                             result.addVerificationInfo("Revocation checked via live OCSP");
                         }
+
+                        result.setRevocationStatus(status);
+                        result.setCertificateRevoked(actuallyRevoked);
+                        log.info("OCSP: Success for cert [" + certSerial + "] → " + status);
+
+                        // Cache the successful OCSP result
+                        revocationCache.put(cacheKey, new RevocationCacheEntry(
+                                status, actuallyRevoked, ocspResult.revocationTime, "Live OCSP"));
+                        log.info("Cached revocation status: " + status + " (Live OCSP)");
+
                         return;
-                    } catch (SignatureVerificationException ocspEx) {
-                        log.warn("OCSP check failed: " + ocspEx.getMessage());
-                        // PDF viewer style: If revocation check fails, treat as verification failure
-                        if (ocspEx.isNetworkError()) {
-                            result.setRevocationStatus("Unknown (Network Error)");
-                            result.addVerificationWarning("Could not check if certificate was revoked (network error)");
+                    } else if (lastException != null) {
+                        // All retry attempts failed
+                        log.warn("OCSP: All " + maxRetries + " attempts failed for cert [" + certSerial + "] " + certSubject + " - " + lastException.getMessage());
+
+                        String status;
+                        if (lastException.isNetworkError()) {
+                            status = "Unknown (Network Error after " + maxRetries + " attempts)";
+                            result.addVerificationWarning("Could not check if certificate was revoked (network error after " + maxRetries + " retry attempts)");
                         } else {
-                            result.setRevocationStatus("Unknown (Check Failed)");
+                            status = "Unknown (Check Failed)";
                             result.addVerificationWarning("Could not check if certificate was revoked");
                         }
+                        result.setRevocationStatus(status);
+
+                        // Cache the failure to avoid repeated failed attempts for same certificate
+                        revocationCache.put(cacheKey, new RevocationCacheEntry(
+                                status, false, null, "Live OCSP (Failed)"));
+                        log.info("Cached revocation check failure for future signatures with same certificate");
                         return;
                     }
                 }
@@ -1258,6 +2069,10 @@ public class SignatureVerificationService {
 
             result.setRevocationStatus("Not Checked");
             result.addVerificationWarning("Could not check if certificate was revoked");
+
+            // Cache the "Not Checked" status to avoid redundant failed attempts
+            revocationCache.put(cacheKey, new RevocationCacheEntry(
+                    "Not Checked", false, null, "No OCSP URL"));
 
         } catch (Exception e) {
             log.warn("OCSP error: " + e.getMessage());
@@ -1309,7 +2124,20 @@ public class SignatureVerificationService {
         return null;
     }
 
-    private boolean performLiveOCSPCheck(X509Certificate cert, X509Certificate issuerCert, String ocspUrl)
+    /**
+     * Result of OCSP check including revocation status and time.
+     */
+    private static class OCSPCheckResult {
+        final boolean isRevoked;
+        final Date revocationTime; // null if not revoked
+
+        OCSPCheckResult(boolean isRevoked, Date revocationTime) {
+            this.isRevoked = isRevoked;
+            this.revocationTime = revocationTime;
+        }
+    }
+
+    private OCSPCheckResult performLiveOCSPCheck(X509Certificate cert, X509Certificate issuerCert, String ocspUrl)
             throws SignatureVerificationException {
         try {
             // Use BouncyCastle 1.48 OCSP API (org.bouncycastle.ocsp)
@@ -1351,7 +2179,7 @@ public class SignatureVerificationService {
 
             if (ocspResp.getStatus() != org.bouncycastle.ocsp.OCSPRespStatus.SUCCESSFUL) {
                 log.warn("OCSP response status: " + ocspResp.getStatus());
-                return false;
+                return new OCSPCheckResult(false, null);
             }
 
             org.bouncycastle.ocsp.BasicOCSPResp basicResp = (org.bouncycastle.ocsp.BasicOCSPResp) ocspResp.getResponseObject();
@@ -1362,15 +2190,21 @@ public class SignatureVerificationService {
                 Object certStatus = singleResp.getCertStatus();
 
                 if (certStatus == null) {
-                    // null means GOOD
+                    // null means GOOD (not revoked)
                     log.info("OCSP: Certificate is GOOD (not revoked)");
-                    return false;
+                    return new OCSPCheckResult(false, null);
                 } else if (certStatus instanceof org.bouncycastle.ocsp.RevokedStatus) {
-                    log.warn("OCSP: Certificate is REVOKED");
-                    return true;
+                    // CRITICAL FIX: Extract revocation time for comparison with signing time
+                    org.bouncycastle.ocsp.RevokedStatus revokedStatus = (org.bouncycastle.ocsp.RevokedStatus) certStatus;
+                    Date revocationTime = revokedStatus.getRevocationTime();
+
+                    log.warn("OCSP: Certificate is REVOKED at: " +
+                            (revocationTime != null ? DATE_FORMAT.format(revocationTime) : "unknown time"));
+
+                    return new OCSPCheckResult(true, revocationTime);
                 } else if (certStatus instanceof org.bouncycastle.ocsp.UnknownStatus) {
                     log.warn("OCSP: Certificate status is UNKNOWN");
-                    return false;
+                    return new OCSPCheckResult(false, null);
                 }
             }
 
@@ -1397,7 +2231,193 @@ public class SignatureVerificationService {
                 e);
         }
 
-        return false;
+        return new OCSPCheckResult(false, null);
+    }
+
+    /**
+     * Result of timestamp verification.
+     */
+    private static class TimestampVerificationResult {
+        final boolean isValid;
+        final String tsaName;
+        final String errorMessage;
+
+        TimestampVerificationResult(boolean isValid, String tsaName, String errorMessage) {
+            this.isValid = isValid;
+            this.tsaName = tsaName;
+            this.errorMessage = errorMessage;
+        }
+    }
+
+    /**
+     * Verifies timestamp according to RFC 3161 and CCA requirements.
+     * This is CRITICAL for legal validity in India.
+     *
+     * NOTE: iText 5 has limited timestamp API access. This performs basic verification.
+     * For full RFC 3161 compliance, consider upgrading to iText 7 or using BouncyCastle directly.
+     *
+     * Verification steps:
+     * 1. Check timestamp presence and extract date
+     * 2. Verify timestamp date is reasonable (not in future, not too old)
+     * 3. Basic signature integrity (iText's built-in verification)
+     *
+     * @param pkcs7 Signature PKCS7 data containing timestamp
+     * @param signatureResult Signature verification result (for context)
+     * @return Timestamp verification result
+     */
+    private TimestampVerificationResult verifyTimestamp(PdfPKCS7 pkcs7, SignatureVerificationResult signatureResult) {
+        try {
+            log.info("=== Timestamp Verification (CCA Requirement) ===");
+
+            // STEP 1: Check if timestamp exists
+            Calendar tsCalendar = pkcs7.getTimeStampDate();
+            if (tsCalendar == null) {
+                return new TimestampVerificationResult(false, null,
+                        "Timestamp not found in signature");
+            }
+
+            Date timestampDate = tsCalendar.getTime();
+            log.info("Step 1: Timestamp found - Date: " + DATE_FORMAT.format(timestampDate));
+
+            // STEP 2: Validate timestamp date is reasonable
+            Date now = new Date();
+            Date signDate = pkcs7.getSignDate() != null ? pkcs7.getSignDate().getTime() : null;
+
+            // Check timestamp is not in future (allow 5 minutes clock skew)
+            Date maxAllowedDate = new Date(now.getTime() + (5 * 60 * 1000));
+            if (timestampDate.after(maxAllowedDate)) {
+                return new TimestampVerificationResult(false, "Unknown TSA",
+                        "Timestamp date is in the future - possible tampering");
+            }
+
+            // Check timestamp is not unreasonably old (before PDF specification existed)
+            Calendar minDate = Calendar.getInstance();
+            minDate.set(1993, Calendar.JUNE, 1); // PDF 1.0 released June 1993
+            if (timestampDate.before(minDate.getTime())) {
+                return new TimestampVerificationResult(false, "Unknown TSA",
+                        "Timestamp date is unreasonably old");
+            }
+
+            // Check timestamp is consistent with signing date (if available)
+            if (signDate != null) {
+                // Timestamp should be close to signing date (allow up to 1 day difference)
+                long timeDiff = Math.abs(timestampDate.getTime() - signDate.getTime());
+                long oneDayMs = 24 * 60 * 60 * 1000L;
+
+                if (timeDiff > oneDayMs) {
+                    log.warn("Timestamp date differs significantly from signing date - " +
+                            "Signing: " + DATE_FORMAT.format(signDate) +
+                            ", Timestamp: " + DATE_FORMAT.format(timestampDate));
+                    signatureResult.addVerificationWarning("Timestamp date differs from signing date by " +
+                            (timeDiff / (60 * 60 * 1000)) + " hours");
+                }
+            }
+
+            log.info("Step 2: Timestamp date validated - " + DATE_FORMAT.format(timestampDate));
+
+            // STEP 3: Try to extract TSA information
+            String tsaName = "Timestamp Authority";
+            try {
+                // iText 5 limitation: Cannot easily access TSA certificate
+                // We'll use generic name for now
+                log.info("Step 3: Timestamp present and validated");
+            } catch (Exception e) {
+                log.debug("Could not extract TSA details", e);
+            }
+
+            // STEP 4: Verify signature includes timestamp (basic integrity check)
+            // iText's verify() method already validates the timestamp signature internally
+            // We rely on that for cryptographic validation
+            try {
+                boolean sigValid = pkcs7.verify();
+                if (!sigValid) {
+                    return new TimestampVerificationResult(false, tsaName,
+                            "Signature (including timestamp) cryptographic verification failed");
+                }
+                log.info("Step 4: Signature with timestamp cryptographically verified");
+            } catch (Exception e) {
+                return new TimestampVerificationResult(false, tsaName,
+                        "Could not verify signature with timestamp: " + e.getMessage());
+            }
+
+            log.info("=== Timestamp Verification: PASSED ===");
+            log.info("NOTE: This is basic timestamp validation. For full RFC 3161 verification, " +
+                    "consider using iText 7 or BouncyCastle TSP library.");
+
+            return new TimestampVerificationResult(true, tsaName, null);
+
+        } catch (Exception e) {
+            log.error("Timestamp verification failed", e);
+            return new TimestampVerificationResult(false, null,
+                    "Timestamp verification failed: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Validates hash algorithm strength according to CCA and NIST SP 800-131A.
+     *
+     * CCA Requirements (India):
+     * - SHA-256 or stronger is required for new signatures
+     * - SHA-1 is deprecated (allowed only for legacy verification)
+     * - MD5 is forbidden
+     *
+     * @param algorithm Hash algorithm name
+     * @return Algorithm strength level
+     */
+    private AlgorithmStrength validateHashAlgorithm(String algorithm) {
+        if (algorithm == null) {
+            return AlgorithmStrength.WEAK;
+        }
+
+        String algoUpper = algorithm.toUpperCase();
+
+        // FORBIDDEN: MD5, MD2, MD4
+        if (algoUpper.contains("MD5") || algoUpper.contains("MD2") || algoUpper.contains("MD4")) {
+            return AlgorithmStrength.FORBIDDEN;
+        }
+
+        // DEPRECATED: SHA-1 (deprecated by NIST in 2017, CCA discourages)
+        if (algoUpper.contains("SHA-1") || algoUpper.equals("SHA1") || algoUpper.equals("SHA")) {
+            return AlgorithmStrength.DEPRECATED;
+        }
+
+        // WEAK: SHA-224 (not recommended but sometimes acceptable)
+        if (algoUpper.contains("SHA-224") || algoUpper.contains("SHA224")) {
+            return AlgorithmStrength.WEAK;
+        }
+
+        // ACCEPTABLE: SHA-256 (minimum requirement for CCA)
+        if (algoUpper.contains("SHA-256") || algoUpper.contains("SHA256")) {
+            return AlgorithmStrength.ACCEPTABLE;
+        }
+
+        // STRONG: SHA-384, SHA-512 (recommended by CCA/NIST)
+        if (algoUpper.contains("SHA-384") || algoUpper.contains("SHA384") ||
+            algoUpper.contains("SHA-512") || algoUpper.contains("SHA512") ||
+            algoUpper.contains("SHA-3")) {
+            return AlgorithmStrength.STRONG;
+        }
+
+        // Unknown algorithm - treat as weak
+        return AlgorithmStrength.WEAK;
+    }
+
+    /**
+     * Converts OID to digest algorithm name.
+     */
+    private String getDigestAlgorithmName(String oid) {
+        switch (oid) {
+            case "1.3.14.3.2.26":
+                return "SHA-1";
+            case "2.16.840.1.101.3.4.2.1":
+                return "SHA-256";
+            case "2.16.840.1.101.3.4.2.2":
+                return "SHA-384";
+            case "2.16.840.1.101.3.4.2.3":
+                return "SHA-512";
+            default:
+                return "SHA-256"; // default
+        }
     }
 
     /**

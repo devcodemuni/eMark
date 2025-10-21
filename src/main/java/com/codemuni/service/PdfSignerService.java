@@ -31,6 +31,7 @@ public class PdfSignerService {
     private File selectedFile;
     private String pdfPassword;
     private KeyStoreProvider provider;
+    private Runnable onSaveCancelled;
 
     public PdfSignerService() {
     }
@@ -58,6 +59,10 @@ public class PdfSignerService {
 
     public void setSelectedFile(File selectedFile) {
         this.selectedFile = selectedFile;
+    }
+
+    public void setOnSaveCancelled(Runnable onSaveCancelled) {
+        this.onSaveCancelled = onSaveCancelled;
     }
 
     public void launchSigningFlow(AppearanceOptions appearanceOptions) {
@@ -88,6 +93,10 @@ public class PdfSignerService {
             File saveFile = showSaveFileDialog();
             if (saveFile == null) {
                 System.out.println("User cancelled file saving.");
+                // Reset UI state when save is cancelled
+                if (onSaveCancelled != null) {
+                    onSaveCancelled.run();
+                }
                 return;
             }
 

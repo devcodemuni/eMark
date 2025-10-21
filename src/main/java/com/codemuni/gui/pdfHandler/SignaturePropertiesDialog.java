@@ -1,8 +1,10 @@
 package com.codemuni.gui.pdfHandler;
 
 import com.codemuni.core.keyStoresProvider.X509SubjectUtils;
+import com.codemuni.service.SignatureVerificationService;
 import com.codemuni.service.SignatureVerificationService.SignatureVerificationResult;
 import com.codemuni.service.SignatureVerificationService.VerificationStatus;
+import com.codemuni.service.TrustStoreManager;
 import com.codemuni.utils.UIConstants;
 import com.codemuni.utils.IconLoader;
 import com.codemuni.utils.CertificateUtils;
@@ -12,122 +14,162 @@ import javax.swing.border.EmptyBorder;
 import java.awt.*;
 import java.io.File;
 import java.text.SimpleDateFormat;
+import java.util.function.Consumer;
 
 /**
- * Detailed signature properties dialog showing comprehensive verification information.
- * Includes certificate details, timestamp info, warnings/errors, and export functionality.
+ * COMPREHENSIVE Signature Properties Dialog (Adobe Reader DC Style)
+ *
+ * Features:
+ * - Complete signature verification details
+ * - Certificate chain tree visualization
+ * - Trust management (add untrusted certs to trust list)
+ * - Re-verification capability
+ * - Color-coded status indicators
+ * - Export certificate functionality
+ * - Non-scrollable horizontal layout (uses tabs)
+ * - Professional UX matching Adobe Reader DC
  */
 public class SignaturePropertiesDialog extends JDialog {
 
+    // ====================================================================================
+    // CONSTANTS
+    // ====================================================================================
+
+    // Color scheme
     private static final Color VALID_COLOR = UIConstants.Colors.STATUS_VALID;
     private static final Color UNKNOWN_COLOR = UIConstants.Colors.STATUS_WARNING;
     private static final Color INVALID_COLOR = UIConstants.Colors.STATUS_ERROR;
+    private static final Color INFO_COLOR = UIConstants.Colors.STATUS_INFO;
     private static final Color BG_COLOR = UIConstants.Colors.BG_PRIMARY;
     private static final Color SECTION_BG = UIConstants.Colors.BG_SECONDARY;
+    private static final Color PANEL_BG = new Color(45, 50, 60);
+    private static final Color PANEL_BORDER = new Color(70, 75, 85);
+    private static final Color CERT_CHAIN_BG = new Color(40, 44, 52);
+
+    // Certificate chain colors
+    private static final Color CERT_ROOT_COLOR = new Color(152, 195, 121);        // Green
+    private static final Color CERT_INTERMEDIATE_COLOR = new Color(229, 192, 123); // Orange
+    private static final Color CERT_END_ENTITY_COLOR = new Color(97, 175, 239);   // Blue
+
+    // Layout
+    private static final int LABEL_WIDTH = 180;
+    private static final int LABEL_WIDTH_SMALL = 140;
+    private static final int DIALOG_WIDTH = 750;
+    private static final int DIALOG_HEIGHT = 850;
 
     private static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("MMM dd, yyyy HH:mm:ss");
 
+    // ====================================================================================
+    // FIELDS
+    // ====================================================================================
+
     private final SignatureVerificationResult result;
     private final Color signatureColor;
+    private final TrustStoreManager trustStoreManager;
 
+    // Optional: For re-verification
+    private File pdfFile;
+    private String pdfPassword;
+    private Consumer<SignatureVerificationResult> onReVerify;
+
+    // ====================================================================================
+    // CONSTRUCTOR
+    // ====================================================================================
+
+    /**
+     * Creates signature properties dialog.
+     *
+     * @param parent Parent frame
+     * @param result Verification result
+     * @param signatureColor Color indicator for this signature
+     */
     public SignaturePropertiesDialog(Frame parent, SignatureVerificationResult result, Color signatureColor) {
         super(parent, "Signature Properties - " + result.getFieldName(), true);
         this.result = result;
         this.signatureColor = signatureColor;
+        this.trustStoreManager = TrustStoreManager.getInstance();
 
-        setupDialog();
-        createUI();
+        initializeDialog();
+        buildUI();
     }
 
-    private void setupDialog() {
-        setSize(750, 850);
+    /**
+     * Sets PDF file information for re-verification feature.
+     */
+    public void setPdfInfo(File pdfFile, String pdfPassword, Consumer<SignatureVerificationResult> onReVerify) {
+        this.pdfFile = pdfFile;
+        this.pdfPassword = pdfPassword;
+        this.onReVerify = onReVerify;
+    }
+
+    // ====================================================================================
+    // INITIALIZATION
+    // ====================================================================================
+
+    private void initializeDialog() {
+        setSize(DIALOG_WIDTH, DIALOG_HEIGHT);
         setLocationRelativeTo(getParent());
         setResizable(true);
-        setMinimumSize(new Dimension(650, 750));
+        setMinimumSize(new Dimension(700, 750));
         getContentPane().setBackground(BG_COLOR);
     }
 
-    private void createUI() {
-        JPanel mainPanel = new JPanel(new BorderLayout(0, 15));
+    private void buildUI() {
+        JPanel mainPanel = new JPanel(new BorderLayout(0, 0));
         mainPanel.setBackground(BG_COLOR);
-        mainPanel.setBorder(new EmptyBorder(20, 20, 20, 20));
+        mainPanel.setBorder(new EmptyBorder(0, 0, 0, 0));
 
-        // Header with colored bar
+        // Top: Header with colored bar, icon, and status
         JPanel headerPanel = createHeaderPanel();
         mainPanel.add(headerPanel, BorderLayout.NORTH);
 
-        // Scrollable content
-        JPanel contentPanel = createContentPanel();
-        JScrollPane scrollPane = new JScrollPane(contentPanel);
-        scrollPane.setBorder(null);
-        scrollPane.getViewport().setBackground(BG_COLOR);
+        // Center: Tabbed content (prevents horizontal scrolling)
+        JTabbedPane tabbedPane = createTabbedContent();
+        mainPanel.add(tabbedPane, BorderLayout.CENTER);
 
-        // To improve scroll density
-        scrollPane.getVerticalScrollBar().setUnitIncrement(16);
-
-        // Ensure scroll starts at top
-        scrollPane.getVerticalScrollBar().setValue(0);
-        SwingUtilities.invokeLater(() -> scrollPane.getViewport().setViewPosition(new java.awt.Point(0, 0)));
-
-        mainPanel.add(scrollPane, BorderLayout.CENTER);
-
-        // Button panel
+        // Bottom: Action buttons
         JPanel buttonPanel = createButtonPanel();
         mainPanel.add(buttonPanel, BorderLayout.SOUTH);
 
         add(mainPanel);
     }
 
+    // ====================================================================================
+    // HEADER PANEL
+    // ====================================================================================
+
     private JPanel createHeaderPanel() {
         JPanel panel = new JPanel(new BorderLayout(0, 0));
         panel.setBackground(BG_COLOR);
+        panel.setBorder(new EmptyBorder(15, 15, 15, 15));
 
-        // Left section: Colored bar + Shield icon
+        // Left: Color bar + Icon
         JPanel leftSection = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
         leftSection.setBackground(BG_COLOR);
 
-        // Colored bar
+        // Color indicator bar
         JPanel colorBar = new JPanel();
         colorBar.setBackground(signatureColor);
         colorBar.setPreferredSize(new Dimension(6, 70));
         leftSection.add(colorBar);
 
-        // Main icon based on signature type and validity
-        boolean isOverallValid = result.getOverallStatus() == VerificationStatus.VALID;
-        boolean isCertified = result.isCertificationSignature();
-
-        // Select appropriate icon
-        String iconPath;
-        if (isCertified) {
-            // Use certified.png for certification signatures
-            iconPath = "certified.png";
-        } else {
-            // Use shield icons for regular signatures
-            iconPath = isOverallValid ? "shield.png" : "shield-invalid.png";
-        }
-
-        ImageIcon mainIcon = IconLoader.loadIcon(iconPath, 48, 48);
-
-        if (mainIcon != null) {
-            JLabel iconLabel = new JLabel(mainIcon);
+        // Status icon
+        ImageIcon icon = getHeaderIcon();
+        if (icon != null) {
+            JLabel iconLabel = new JLabel(icon);
             iconLabel.setBorder(new EmptyBorder(10, 12, 10, 12));
-            iconLabel.setToolTipText(isCertified ? "This document is certified" : null);
             leftSection.add(iconLabel);
-        } else {
-            // Fallback: if icon missing, maintain layout spacing
-            leftSection.add(Box.createRigidArea(new Dimension(12, 70)));
         }
-
 
         panel.add(leftSection, BorderLayout.WEST);
 
-        // Status section
+        // Center: Signer name and status
         JPanel statusPanel = new JPanel();
         statusPanel.setLayout(new BoxLayout(statusPanel, BoxLayout.Y_AXIS));
         statusPanel.setBackground(BG_COLOR);
 
         String signerName = X509SubjectUtils.extractCommonNameFromDN(result.getCertificateSubject());
-        if (signerName.isEmpty()) {
+        if (signerName == null || signerName.isEmpty()) {
             signerName = result.getFieldName();
         }
 
@@ -152,18 +194,20 @@ public class SignaturePropertiesDialog extends JDialog {
         statusPanel.add(Box.createRigidArea(new Dimension(0, 4)));
         statusPanel.add(fieldLabel);
 
-        // Add invisible badge if signature is invisible
+        // Add invisible badge if needed
         if (result.isInvisible()) {
             statusPanel.add(Box.createRigidArea(new Dimension(0, 4)));
-            JLabel invisibleBadge = new JLabel("INVISIBLE");
-            invisibleBadge.setFont(new Font("Segoe UI", Font.BOLD, 10));
-            invisibleBadge.setForeground(new Color(255, 255, 255));
-            invisibleBadge.setOpaque(true);
-            invisibleBadge.setBackground(new Color(158, 158, 158));
-            invisibleBadge.setBorder(new EmptyBorder(3, 7, 3, 7));
-            invisibleBadge.setAlignmentX(Component.LEFT_ALIGNMENT);
-            invisibleBadge.setToolTipText("This signature has no visual appearance on the document");
+            JLabel invisibleBadge = createBadge("INVISIBLE", new Color(158, 158, 158));
+            invisibleBadge.setToolTipText("This signature has no visual appearance");
             statusPanel.add(invisibleBadge);
+        }
+
+        // Add certification badge if certified
+        if (result.isCertificationSignature()) {
+            statusPanel.add(Box.createRigidArea(new Dimension(0, 4)));
+            JLabel certBadge = createBadge("CERTIFIED", new Color(52, 152, 219));
+            certBadge.setToolTipText("This is a certification signature");
+            statusPanel.add(certBadge);
         }
 
         panel.add(statusPanel, BorderLayout.CENTER);
@@ -171,109 +215,785 @@ public class SignaturePropertiesDialog extends JDialog {
         return panel;
     }
 
-    private JPanel createContentPanel() {
+    private ImageIcon getHeaderIcon() {
+        boolean isValid = result.getOverallStatus() == VerificationStatus.VALID;
+        boolean isCertified = result.isCertificationSignature();
+
+        String iconPath;
+        if (isCertified) {
+            iconPath = "certified.png";
+        } else {
+            iconPath = isValid ? "shield.png" : "shield-invalid.png";
+        }
+
+        return IconLoader.loadIcon(iconPath, 48, 48);
+    }
+
+    private JLabel createBadge(String text, Color bgColor) {
+        JLabel badge = new JLabel(text);
+        badge.setFont(new Font("Segoe UI", Font.BOLD, 10));
+        badge.setForeground(Color.WHITE);
+        badge.setOpaque(true);
+        badge.setBackground(bgColor);
+        badge.setBorder(new EmptyBorder(3, 7, 3, 7));
+        badge.setAlignmentX(Component.LEFT_ALIGNMENT);
+        return badge;
+    }
+
+    // ====================================================================================
+    // TABBED CONTENT (Prevents horizontal scrolling)
+    // ====================================================================================
+
+    private JTabbedPane createTabbedContent() {
+        JTabbedPane tabbedPane = new JTabbedPane();
+        tabbedPane.setFont(UIConstants.Fonts.NORMAL_BOLD);
+        tabbedPane.setBackground(BG_COLOR);
+        tabbedPane.setBorder(new EmptyBorder(0, 15, 15, 15));
+
+        // Tab 1: Verification Status & Details
+        JScrollPane overviewTab = createOverviewTab();
+        tabbedPane.addTab("Overview", null, overviewTab, "Verification status and signature details");
+
+        // Tab 2: Certificate Information
+        JScrollPane certificateTab = createCertificateTab();
+        tabbedPane.addTab("Certificate", null, certificateTab, "Certificate details and chain");
+
+        // Tab 3: Advanced Info (Timestamp, LTV, Document info)
+        JScrollPane advancedTab = createAdvancedTab();
+        tabbedPane.addTab("Advanced", null, advancedTab, "Timestamp, LTV, and document information");
+
+        return tabbedPane;
+    }
+
+    // ====================================================================================
+    // TAB 1: OVERVIEW
+    // ====================================================================================
+
+    private JScrollPane createOverviewTab() {
         JPanel panel = new JPanel();
         panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
         panel.setBackground(BG_COLOR);
-
-        // Info Section (if any)
-        if (!result.getVerificationInfo().isEmpty()) {
-            panel.add(createSection("Information", createInfoContent()));
-            panel.add(Box.createRigidArea(new Dimension(0, 12)));
-        }
-
-        // Warnings Section (if any)
-        if (!result.getVerificationWarnings().isEmpty()) {
-            panel.add(createSection("Warnings", createWarningsContent()));
-            panel.add(Box.createRigidArea(new Dimension(0, 12)));
-        }
-
-        // Errors Section (if any)
-        if (!result.getVerificationErrors().isEmpty()) {
-            panel.add(createSection("Errors", createErrorsContent()));
-            panel.add(Box.createRigidArea(new Dimension(0, 12)));
-        }
+        panel.setBorder(new EmptyBorder(15, 15, 15, 15));
 
         // Verification Status Section
-        panel.add(createSection("Verification Status", createVerificationStatusContent()));
-        panel.add(Box.createRigidArea(new Dimension(0, 12)));
+        panel.add(createVerificationStatusPanel());
+        panel.add(Box.createRigidArea(new Dimension(0, 15)));
 
-        // Signature Information Section
-        panel.add(createSection("Signature Information", createSignatureInfoContent()));
-        panel.add(Box.createRigidArea(new Dimension(0, 12)));
+        // Messages Section (Errors, Warnings, Info) - Second position
+        if (!result.getVerificationErrors().isEmpty()) {
+            panel.add(createMessagesPanel("Errors", result.getVerificationErrors(), INVALID_COLOR));
+            panel.add(Box.createRigidArea(new Dimension(0, 15)));
+        }
 
-        // Certificate Information Section
-        panel.add(createSection("Certificate Information", createCertificateInfoContent()));
-        panel.add(Box.createRigidArea(new Dimension(0, 12)));
+        if (!result.getVerificationWarnings().isEmpty()) {
+            panel.add(createMessagesPanel("Warnings", result.getVerificationWarnings(), UNKNOWN_COLOR));
+            panel.add(Box.createRigidArea(new Dimension(0, 15)));
+        }
 
-        // Document Information Section
-        panel.add(createSection("Document Information", createDocumentInfoContent()));
-        panel.add(Box.createRigidArea(new Dimension(0, 12)));
+        if (!result.getVerificationInfo().isEmpty()) {
+            panel.add(createMessagesPanel("Information", result.getVerificationInfo(), INFO_COLOR));
+            panel.add(Box.createRigidArea(new Dimension(0, 15)));
+        }
+
+        // Signature Details Section
+        panel.add(createSignatureDetailsPanel());
+        panel.add(Box.createRigidArea(new Dimension(0, 15)));
+
+        // Trust Management Section (if not trusted)
+        if (!result.isCertificateTrusted() && result.getSignerCertificate() != null) {
+            panel.add(createTrustManagementPanel());
+            panel.add(Box.createRigidArea(new Dimension(0, 15)));
+        }
+
+        JScrollPane scrollPane = new JScrollPane(panel);
+        scrollPane.setBorder(null);
+        scrollPane.getViewport().setBackground(BG_COLOR);
+        scrollPane.getVerticalScrollBar().setUnitIncrement(16);
+        scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+
+        return scrollPane;
+    }
+
+    private JPanel createVerificationStatusPanel() {
+        JPanel section = createSection("Verification Status");
+
+        addStatusRow(section, "Signature", result.isSignatureValid());
+        addStatusRow(section, "Document Integrity", result.isDocumentIntact());
+        addStatusRow(section, "Certificate Valid", result.isCertificateValid());
+        addStatusRow(section, "Certificate Trusted", result.isCertificateTrusted());
+        addStatusRow(section, "Revocation Status", !result.isCertificateRevoked(), result.getRevocationStatus());
+
+        // Timestamp
+        String timestampStatus = getTimestampStatusText();
+        boolean timestampValid = result.isTimestampValid();
+        addStatusRow(section, "Timestamp", timestampValid, timestampStatus);
+
+        // LTV
+        String ltvStatus = result.hasLTV() ? "Enabled" : "Not Enabled";
+        addStatusRow(section, "Long Term Validation", result.hasLTV(), ltvStatus);
+
+        return section;
+    }
+
+    private JPanel createMessagesPanel(String title, java.util.List<String> messages, Color messageColor) {
+        JPanel section = createSection(title);
+
+        for (String message : messages) {
+            addMessageRow(section, message, messageColor);
+        }
+
+        return section;
+    }
+
+    private JPanel createSignatureDetailsPanel() {
+        JPanel section = createSection("Signature Details");
+
+        if (result.getSignDate() != null) {
+            addDetailRow(section, "Signed On", DATE_FORMAT.format(result.getSignDate()));
+        }
+
+        if (result.getReason() != null && !result.getReason().isEmpty()) {
+            addDetailRow(section, "Reason", result.getReason());
+        }
+
+        if (result.getLocation() != null && !result.getLocation().isEmpty()) {
+            addDetailRow(section, "Location", result.getLocation());
+        }
+
+        if (result.getContactInfo() != null && !result.getContactInfo().isEmpty()) {
+            addDetailRow(section, "Contact", result.getContactInfo());
+        }
+
+        if (result.getSignatureAlgorithm() != null) {
+            addDetailRow(section, "Algorithm", result.getSignatureAlgorithm());
+        }
+
+        // Certification info
+        String certType = result.isCertificationSignature() ? "Certified Signature" : "Regular Signature";
+        addDetailRow(section, "Type", certType);
+
+        if (result.isCertificationSignature()) {
+            String allowMore = result.getCertificationLevel().allowsSignatures() ? "Yes" : "No";
+            addDetailRow(section, "Can Add More Signatures", allowMore);
+        }
+
+        return section;
+    }
+
+    private JPanel createTrustManagementPanel() {
+        JPanel section = createSection("Trust Management");
+
+        // Warning message
+        JPanel warningPanel = new JPanel(new BorderLayout(10, 0));
+        warningPanel.setBackground(new Color(60, 50, 40));
+        warningPanel.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(new Color(180, 140, 80), 1),
+            new EmptyBorder(12, 12, 12, 12)
+        ));
+        warningPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 100));
+
+        JLabel warningIcon = new JLabel("!");
+        warningIcon.setFont(new Font("Segoe UI", Font.BOLD, 24));
+        warningIcon.setForeground(new Color(255, 193, 7));
+        warningPanel.add(warningIcon, BorderLayout.WEST);
+
+        JPanel textPanel = new JPanel();
+        textPanel.setLayout(new BoxLayout(textPanel, BoxLayout.Y_AXIS));
+        textPanel.setBackground(new Color(60, 50, 40));
+
+        JLabel titleLabel = new JLabel("Certificate Not Trusted");
+        titleLabel.setFont(UIConstants.Fonts.NORMAL_BOLD);
+        titleLabel.setForeground(new Color(255, 193, 7));
+        titleLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        JTextArea messageArea = new JTextArea(
+            "This certificate is not in your trust list. You can add it to trust this signer in the future."
+        );
+        messageArea.setFont(UIConstants.Fonts.SMALL_PLAIN);
+        messageArea.setForeground(UIConstants.Colors.TEXT_MUTED);
+        messageArea.setBackground(new Color(60, 50, 40));
+        messageArea.setLineWrap(true);
+        messageArea.setWrapStyleWord(true);
+        messageArea.setEditable(false);
+        messageArea.setBorder(null);
+        messageArea.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        textPanel.add(titleLabel);
+        textPanel.add(Box.createRigidArea(new Dimension(0, 4)));
+        textPanel.add(messageArea);
+
+        warningPanel.add(textPanel, BorderLayout.CENTER);
+
+        // Add trust button
+        JButton addTrustButton = new JButton("Add to Trust List");
+        addTrustButton.setFont(UIConstants.Fonts.NORMAL_BOLD);
+        addTrustButton.setPreferredSize(new Dimension(150, 32));
+        addTrustButton.setFocusPainted(false);
+        addTrustButton.setBackground(new Color(76, 175, 80));
+        addTrustButton.setForeground(Color.WHITE);
+        addTrustButton.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(new Color(56, 142, 60), 1),
+            new EmptyBorder(6, 12, 6, 12)
+        ));
+        addTrustButton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        addTrustButton.addActionListener(e -> addCertificateToTrustList());
+
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        buttonPanel.setBackground(new Color(60, 50, 40));
+        buttonPanel.add(addTrustButton);
+
+        textPanel.add(Box.createRigidArea(new Dimension(0, 8)));
+        textPanel.add(buttonPanel);
+
+        section.add(warningPanel);
+        section.add(Box.createRigidArea(new Dimension(0, 8)));
+
+        return section;
+    }
+
+    // ====================================================================================
+    // TAB 2: CERTIFICATE
+    // ====================================================================================
+
+    private JScrollPane createCertificateTab() {
+        JPanel panel = new JPanel();
+        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+        panel.setBackground(BG_COLOR);
+        panel.setBorder(new EmptyBorder(15, 15, 15, 15));
+
+        // Certificate Details
+        panel.add(createCertificateDetailsPanel());
+        panel.add(Box.createRigidArea(new Dimension(0, 15)));
+
+        // Certificate Chain
+        if (result.getCertificateChain() != null && !result.getCertificateChain().isEmpty()) {
+            panel.add(createCertificateChainPanel());
+            panel.add(Box.createRigidArea(new Dimension(0, 15)));
+        }
+
+        JScrollPane scrollPane = new JScrollPane(panel);
+        scrollPane.setBorder(null);
+        scrollPane.getViewport().setBackground(BG_COLOR);
+        scrollPane.getVerticalScrollBar().setUnitIncrement(16);
+        scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+
+        return scrollPane;
+    }
+
+    private JPanel createCertificateDetailsPanel() {
+        JPanel section = createSection("Certificate Details");
+
+        if (result.getCertificateSubject() != null) {
+            addDetailRow(section, "Subject", result.getCertificateSubject());
+        }
+
+        if (result.getCertificateIssuer() != null) {
+            addDetailRow(section, "Issuer", result.getCertificateIssuer());
+        }
+
+        if (result.getSignerCertificate() != null) {
+            String serialHex = result.getSignerCertificate().getSerialNumber().toString(16).toUpperCase();
+            addDetailRow(section, "Serial Number", serialHex);
+        }
+
+        if (result.getCertificateValidFrom() != null) {
+            addDetailRow(section, "Valid From", DATE_FORMAT.format(result.getCertificateValidFrom()));
+        }
+
+        if (result.getCertificateValidTo() != null) {
+            addDetailRow(section, "Valid To", DATE_FORMAT.format(result.getCertificateValidTo()));
+        }
+
+        if (result.getSignerCertificate() != null) {
+            addDetailRow(section, "Version", "V" + result.getSignerCertificate().getVersion());
+
+            String sigAlg = result.getSignerCertificate().getSigAlgName();
+            String sigAlgOID = result.getSignerCertificate().getSigAlgOID();
+            addDetailRow(section, "Signature Algorithm", sigAlg + " (" + sigAlgOID + ")");
+
+            java.security.PublicKey pubKey = result.getSignerCertificate().getPublicKey();
+            String keyAlgorithm = pubKey.getAlgorithm();
+            int keySize = CertificateUtils.getKeySize(pubKey);
+            addDetailRow(section, "Public Key", keyAlgorithm + " (" + keySize + " bits)");
+
+            java.util.List<String> keyUsages = CertificateUtils.getKeyUsageStrings(result.getSignerCertificate());
+            if (!keyUsages.isEmpty()) {
+                addDetailRow(section, "Key Usage", String.join(", ", keyUsages));
+            }
+
+            java.util.List<String> extKeyUsages = CertificateUtils.getExtendedKeyUsageStrings(result.getSignerCertificate());
+            if (!extKeyUsages.isEmpty()) {
+                addDetailRow(section, "Extended Key Usage", String.join(", ", extKeyUsages));
+            }
+        }
+
+        return section;
+    }
+
+    private JPanel createCertificateChainPanel() {
+        JPanel section = createSection("Certificate Chain Hierarchy");
+
+        int chainSize = result.getCertificateChain().size();
+
+        // Chain count info
+        JLabel countLabel = new JLabel(chainSize + " certificate" + (chainSize > 1 ? "s" : "") + " in chain");
+        countLabel.setFont(UIConstants.Fonts.SMALL_PLAIN);
+        countLabel.setForeground(UIConstants.Colors.TEXT_TERTIARY);
+        countLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        countLabel.setBorder(new EmptyBorder(0, 0, 8, 0));
+        section.add(countLabel);
+
+        // Tree panel
+        JPanel treePanel = new JPanel();
+        treePanel.setLayout(new BoxLayout(treePanel, BoxLayout.Y_AXIS));
+        treePanel.setBackground(CERT_CHAIN_BG);
+        treePanel.setBorder(new EmptyBorder(12, 12, 12, 12));
+        treePanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
+
+        // Display in reverse order (root first, user cert last)
+        for (int i = chainSize - 1; i >= 0; i--) {
+            java.security.cert.X509Certificate cert = result.getCertificateChain().get(i);
+            String subjectCN = X509SubjectUtils.extractCommonNameFromDN(cert.getSubjectDN().toString());
+
+            CertificateUtils.CertificateRole certRole = CertificateUtils.determineCertificateRole(cert);
+            String role = certRole.getDisplayName();
+
+            int depth = chainSize - 1 - i;
+            String treePrefix = buildTreePrefix(depth, i == 0);
+
+            JLabel certLabel = new JLabel(treePrefix + role + ": " + subjectCN);
+            certLabel.setFont(new Font("Consolas", Font.PLAIN, 13));
+            certLabel.setForeground(getCertificateColorByDepth(depth, chainSize));
+            certLabel.setBorder(new EmptyBorder(2, 0, 2, 0));
+            certLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+            treePanel.add(certLabel);
+        }
+
+        section.add(treePanel);
+        section.add(Box.createRigidArea(new Dimension(0, 8)));
+
+        return section;
+    }
+
+    // ====================================================================================
+    // TAB 3: ADVANCED
+    // ====================================================================================
+
+    private JScrollPane createAdvancedTab() {
+        JPanel panel = new JPanel();
+        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+        panel.setBackground(BG_COLOR);
+        panel.setBorder(new EmptyBorder(15, 15, 15, 15));
+
+        // Timestamp Information
+        panel.add(createTimestampPanel());
+        panel.add(Box.createRigidArea(new Dimension(0, 15)));
+
+        // LTV Information
+        panel.add(createLTVPanel());
+        panel.add(Box.createRigidArea(new Dimension(0, 15)));
+
+        // Document Information
+        panel.add(createDocumentInfoPanel());
+        panel.add(Box.createRigidArea(new Dimension(0, 15)));
+
+        JScrollPane scrollPane = new JScrollPane(panel);
+        scrollPane.setBorder(null);
+        scrollPane.getViewport().setBackground(BG_COLOR);
+        scrollPane.getVerticalScrollBar().setUnitIncrement(16);
+        scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+
+        return scrollPane;
+    }
+
+    private JPanel createTimestampPanel() {
+        JPanel section = createSection("Timestamp Information");
+
+        if (result.getTimestampDate() != null || result.isTimestampValid()) {
+            if (result.getTimestampDate() != null) {
+                addDetailRow(section, "Timestamp Date", DATE_FORMAT.format(result.getTimestampDate()));
+            }
+
+            if (result.getTimestampAuthority() != null) {
+                addDetailRow(section, "Authority", result.getTimestampAuthority());
+            }
+
+            String status = result.isTimestampValid() ? "Verified" : "Could not verify";
+            Color statusColor = result.isTimestampValid() ? VALID_COLOR : UNKNOWN_COLOR;
+            addColoredDetailRow(section, "Status", status, statusColor);
+        } else {
+            addDetailRow(section, "Status", "Not included in signature");
+        }
+
+        return section;
+    }
+
+    private JPanel createLTVPanel() {
+        JPanel section = createSection("Long Term Validation");
+
+        String ltvStatus = result.hasLTV() ? "Enabled" : "Not Enabled";
+        Color ltvColor = result.hasLTV() ? VALID_COLOR : UIConstants.Colors.TEXT_MUTED;
+        addColoredDetailRow(section, "Status", ltvStatus, ltvColor);
+
+        if (result.hasLTV()) {
+            addDetailRow(section, "Description",
+                "This signature includes LTV data (OCSP responses and/or CRLs) embedded in the PDF. " +
+                "This allows the signature to be validated even after the certificate expires or is revoked.");
+        } else {
+            addDetailRow(section, "Description",
+                "LTV data is not embedded in this signature. The signature may not be verifiable " +
+                "after the certificate expires or is revoked.");
+        }
+
+        return section;
+    }
+
+    private JPanel createDocumentInfoPanel() {
+        JPanel section = createSection("Document Information");
+
+        if (result.getTotalRevisions() > 0) {
+            addDetailRow(section, "Signature Revision", result.getRevision() + " of " + result.getTotalRevisions());
+
+            String coversAll = result.isCoversWholeDocument() ? "Yes" : "No";
+            Color coverColor = result.isCoversWholeDocument() ? VALID_COLOR : UNKNOWN_COLOR;
+            addColoredDetailRow(section, "Covers Whole Document", coversAll, coverColor);
+
+            if (!result.isCoversWholeDocument()) {
+                addDetailRow(section, "Note",
+                    "This signature does not cover the entire document. Changes may have been made after signing.");
+            }
+        }
+
+        if (result.getPageNumber() > 0) {
+            addDetailRow(section, "Signature Location", "Page " + result.getPageNumber());
+        }
+
+        String visibility = result.isInvisible() ?
+            "Invisible (no visual appearance)" :
+            "Visible on page " + result.getPageNumber();
+        addDetailRow(section, "Visibility", visibility);
+
+        return section;
+    }
+
+    // ====================================================================================
+    // BUTTON PANEL
+    // ====================================================================================
+
+    private JPanel createButtonPanel() {
+        JPanel panel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 10));
+        panel.setBackground(BG_COLOR);
+        panel.setBorder(new EmptyBorder(5, 15, 10, 15));
+
+        // Re-verify button (if PDF info available)
+        if (pdfFile != null && onReVerify != null) {
+            JButton reVerifyBtn = new JButton("Re-Verify");
+            reVerifyBtn.setFont(UIConstants.Fonts.NORMAL_PLAIN);
+            reVerifyBtn.setPreferredSize(new Dimension(120, 32));
+            reVerifyBtn.setFocusPainted(false);
+            reVerifyBtn.setToolTipText("Re-verify this signature");
+            reVerifyBtn.addActionListener(e -> reVerifySignature());
+            panel.add(reVerifyBtn);
+        }
+
+        // Export certificate button
+        if (result.getSignerCertificate() != null) {
+            JButton exportBtn = new JButton("Export Certificate");
+            exportBtn.setFont(UIConstants.Fonts.NORMAL_PLAIN);
+            exportBtn.setPreferredSize(new Dimension(150, 32));
+            exportBtn.setFocusPainted(false);
+            exportBtn.addActionListener(e -> exportCertificate());
+            panel.add(exportBtn);
+        }
+
+        // View certificate button
+        if (result.getSignerCertificate() != null) {
+            JButton viewBtn = new JButton("View Certificate");
+            viewBtn.setFont(UIConstants.Fonts.NORMAL_PLAIN);
+            viewBtn.setPreferredSize(new Dimension(140, 32));
+            viewBtn.setFocusPainted(false);
+            viewBtn.addActionListener(e -> viewFullCertificate());
+            panel.add(viewBtn);
+        }
+
+        // Close button
+        JButton closeBtn = new JButton("Close");
+        closeBtn.setFont(UIConstants.Fonts.NORMAL_BOLD);
+        closeBtn.setPreferredSize(new Dimension(100, 32));
+        closeBtn.setFocusPainted(false);
+        closeBtn.addActionListener(e -> dispose());
+        panel.add(closeBtn);
 
         return panel;
     }
 
-    private JPanel createSection(String title, JPanel content) {
-        JPanel section = new JPanel(new BorderLayout());
+    // ====================================================================================
+    // ACTIONS
+    // ====================================================================================
+
+    private void addCertificateToTrustList() {
+        try {
+            // Export certificate to temp file
+            java.security.cert.X509Certificate cert = result.getSignerCertificate();
+            String cn = X509SubjectUtils.extractCommonNameFromDN(cert.getSubjectDN().toString());
+
+            // Create temp file
+            File tempFile = File.createTempFile("cert_", ".pem");
+            String pemCert = "-----BEGIN CERTIFICATE-----\n" +
+                           java.util.Base64.getMimeEncoder(64, new byte[]{'\n'})
+                               .encodeToString(cert.getEncoded()) +
+                           "\n-----END CERTIFICATE-----\n";
+            java.nio.file.Files.write(tempFile.toPath(), pemCert.getBytes());
+
+            // Add to trust store
+            String alias = cn.replaceAll("[^a-zA-Z0-9]", "_");
+            trustStoreManager.addTrustCertificate(tempFile, alias);
+
+            // Delete temp file
+            tempFile.delete();
+
+            JOptionPane.showMessageDialog(this,
+                "Certificate added to trust list successfully!\n\n" +
+                "Certificate: " + cn + "\n\n" +
+                "You may need to re-verify signatures to see the updated trust status.",
+                "Certificate Added",
+                JOptionPane.INFORMATION_MESSAGE);
+
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this,
+                "Failed to add certificate to trust list:\n" + ex.getMessage(),
+                "Error",
+                JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void reVerifySignature() {
+        try {
+            // Show progress
+            JDialog progressDialog = new JDialog(this, "Re-verifying...", true);
+            JPanel progressPanel = new JPanel(new BorderLayout(10, 10));
+            progressPanel.setBorder(new EmptyBorder(20, 20, 20, 20));
+            progressPanel.add(new JLabel("Re-verifying signature..."), BorderLayout.CENTER);
+            JProgressBar progressBar = new JProgressBar();
+            progressBar.setIndeterminate(true);
+            progressPanel.add(progressBar, BorderLayout.SOUTH);
+            progressDialog.add(progressPanel);
+            progressDialog.setSize(300, 120);
+            progressDialog.setLocationRelativeTo(this);
+
+            // Re-verify in background
+            SwingWorker<SignatureVerificationResult, Void> worker = new SwingWorker<SignatureVerificationResult, Void>() {
+                @Override
+                protected SignatureVerificationResult doInBackground() throws Exception {
+                    SignatureVerificationService service = new SignatureVerificationService();
+                    java.util.List<SignatureVerificationResult> results =
+                        service.verifySignatures(pdfFile, pdfPassword);
+
+                    // Find our signature
+                    for (SignatureVerificationResult r : results) {
+                        if (r.getFieldName().equals(result.getFieldName())) {
+                            return r;
+                        }
+                    }
+                    return null;
+                }
+
+                @Override
+                protected void done() {
+                    progressDialog.dispose();
+                    try {
+                        SignatureVerificationResult newResult = get();
+                        if (newResult != null && onReVerify != null) {
+                            onReVerify.accept(newResult);
+                            dispose(); // Close dialog
+
+                            // Show new dialog with updated result
+                            SignaturePropertiesDialog newDialog = new SignaturePropertiesDialog(
+                                (Frame) getParent(), newResult, signatureColor);
+                            newDialog.setPdfInfo(pdfFile, pdfPassword, onReVerify);
+                            newDialog.setVisible(true);
+                        }
+                    } catch (Exception ex) {
+                        JOptionPane.showMessageDialog(SignaturePropertiesDialog.this,
+                            "Re-verification failed:\n" + ex.getMessage(),
+                            "Error",
+                            JOptionPane.ERROR_MESSAGE);
+                    }
+                }
+            };
+
+            worker.execute();
+            progressDialog.setVisible(true);
+
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this,
+                "Failed to re-verify signature:\n" + ex.getMessage(),
+                "Error",
+                JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void exportCertificate() {
+        try {
+            java.security.cert.X509Certificate cert = result.getSignerCertificate();
+            if (cert == null) {
+                JOptionPane.showMessageDialog(this,
+                    "No certificate available to export",
+                    "Export Error",
+                    JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+
+            JFileChooser chooser = new JFileChooser();
+            chooser.setDialogTitle("Save Certificate");
+
+            String cn = X509SubjectUtils.extractCommonNameFromDN(cert.getSubjectDN().toString());
+            String defaultName = cn.replaceAll("[^a-zA-Z0-9]", "_") + "_certificate.pem";
+            chooser.setSelectedFile(new File(defaultName));
+
+            chooser.addChoosableFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("PEM Certificate (*.pem)", "pem"));
+            chooser.addChoosableFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("DER Certificate (*.cer, *.der)", "cer", "der"));
+            chooser.setFileFilter(chooser.getChoosableFileFilters()[0]);
+
+            if (chooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
+                File outputFile = chooser.getSelectedFile();
+                boolean isPEM = chooser.getFileFilter().getDescription().contains("PEM");
+
+                if (isPEM && !outputFile.getName().toLowerCase().endsWith(".pem")) {
+                    outputFile = new File(outputFile.getAbsolutePath() + ".pem");
+                } else if (!isPEM && !outputFile.getName().toLowerCase().matches(".*\\.(cer|der)$")) {
+                    outputFile = new File(outputFile.getAbsolutePath() + ".cer");
+                }
+
+                if (isPEM) {
+                    String pemCert = "-----BEGIN CERTIFICATE-----\n" +
+                                   java.util.Base64.getMimeEncoder(64, new byte[]{'\n'})
+                                       .encodeToString(cert.getEncoded()) +
+                                   "\n-----END CERTIFICATE-----\n";
+                    java.nio.file.Files.write(outputFile.toPath(), pemCert.getBytes());
+                } else {
+                    java.nio.file.Files.write(outputFile.toPath(), cert.getEncoded());
+                }
+
+                JOptionPane.showMessageDialog(this,
+                    "Certificate exported successfully to:\n" + outputFile.getAbsolutePath(),
+                    "Export Success",
+                    JOptionPane.INFORMATION_MESSAGE);
+            }
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this,
+                "Failed to export certificate:\n" + ex.getMessage(),
+                "Export Error",
+                JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void viewFullCertificate() {
+        try {
+            java.security.cert.X509Certificate cert = result.getSignerCertificate();
+            if (cert == null) {
+                return;
+            }
+
+            JDialog certDialog = new JDialog(this, "Certificate Details", true);
+            certDialog.setSize(800, 600);
+            certDialog.setLocationRelativeTo(this);
+
+            JTextArea textArea = new JTextArea();
+            textArea.setFont(UIConstants.Fonts.MONOSPACE);
+            textArea.setEditable(false);
+            textArea.setBackground(new Color(30, 30, 30));
+            textArea.setForeground(UIConstants.Colors.TEXT_PRIMARY);
+            textArea.setCaretColor(Color.WHITE);
+
+            StringBuilder details = new StringBuilder();
+            details.append("X.509 Certificate Details\n");
+            details.append(repeatChar('=', 80)).append("\n\n");
+            details.append("Version: ").append(cert.getVersion()).append("\n");
+            details.append("Serial Number: ").append(cert.getSerialNumber().toString(16).toUpperCase()).append("\n\n");
+            details.append("Subject:\n  ").append(cert.getSubjectDN().toString()).append("\n\n");
+            details.append("Issuer:\n  ").append(cert.getIssuerDN().toString()).append("\n\n");
+            details.append("Valid From: ").append(DATE_FORMAT.format(cert.getNotBefore())).append("\n");
+            details.append("Valid To: ").append(DATE_FORMAT.format(cert.getNotAfter())).append("\n\n");
+            details.append("Signature Algorithm: ").append(cert.getSigAlgName()).append("\n");
+            details.append("Signature Algorithm OID: ").append(cert.getSigAlgOID()).append("\n\n");
+            details.append("Public Key Algorithm: ").append(cert.getPublicKey().getAlgorithm()).append("\n");
+            details.append("Public Key Size: ").append(CertificateUtils.getKeySize(cert.getPublicKey())).append(" bits\n\n");
+
+            java.util.List<String> keyUsages = CertificateUtils.getKeyUsageStrings(cert);
+            if (!keyUsages.isEmpty()) {
+                details.append("Key Usage: ").append(String.join(", ", keyUsages)).append("\n");
+            }
+
+            java.util.List<String> extKeyUsages = CertificateUtils.getExtendedKeyUsageStrings(cert);
+            if (!extKeyUsages.isEmpty()) {
+                details.append("Extended Key Usage: ").append(String.join(", ", extKeyUsages)).append("\n");
+            }
+
+            details.append("\n").append(repeatChar('-', 80)).append("\n");
+            details.append("PEM Encoded:\n").append(repeatChar('-', 80)).append("\n\n");
+            details.append("-----BEGIN CERTIFICATE-----\n");
+            details.append(java.util.Base64.getMimeEncoder(64, new byte[]{'\n'})
+                .encodeToString(cert.getEncoded()));
+            details.append("\n-----END CERTIFICATE-----\n");
+
+            textArea.setText(details.toString());
+            textArea.setCaretPosition(0);
+
+            JScrollPane scrollPane = new JScrollPane(textArea);
+            scrollPane.setBorder(UIConstants.Padding.SMALL);
+
+            JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+            buttonPanel.setBackground(BG_COLOR);
+            JButton copyBtn = new JButton("Copy to Clipboard");
+            copyBtn.addActionListener(e -> {
+                java.awt.datatransfer.StringSelection selection =
+                    new java.awt.datatransfer.StringSelection(textArea.getText());
+                java.awt.Toolkit.getDefaultToolkit().getSystemClipboard().setContents(selection, selection);
+                JOptionPane.showMessageDialog(certDialog, "Copied to clipboard", "Copied", JOptionPane.INFORMATION_MESSAGE);
+            });
+            JButton closeBtn = new JButton("Close");
+            closeBtn.addActionListener(e -> certDialog.dispose());
+            buttonPanel.add(copyBtn);
+            buttonPanel.add(closeBtn);
+
+            certDialog.setLayout(new BorderLayout());
+            certDialog.add(scrollPane, BorderLayout.CENTER);
+            certDialog.add(buttonPanel, BorderLayout.SOUTH);
+
+            certDialog.setVisible(true);
+
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this,
+                "Failed to view certificate:\n" + ex.getMessage(),
+                "View Error",
+                JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    // ====================================================================================
+    // HELPER METHODS - UI COMPONENTS
+    // ====================================================================================
+
+    private JPanel createSection(String title) {
+        JPanel section = new JPanel();
+        section.setLayout(new BoxLayout(section, BoxLayout.Y_AXIS));
         section.setBackground(SECTION_BG);
         section.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(UIConstants.Colors.BORDER_SECONDARY, 1),
-                new EmptyBorder(14, 16, 14, 16)
+            BorderFactory.createLineBorder(UIConstants.Colors.BORDER_SECONDARY, 1),
+            new EmptyBorder(14, 16, 14, 16)
         ));
         section.setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
 
         JLabel titleLabel = new JLabel(title);
         titleLabel.setFont(UIConstants.Fonts.LARGE_BOLD);
         titleLabel.setForeground(UIConstants.Colors.TEXT_PRIMARY);
-        titleLabel.setBorder(new EmptyBorder(0, 0, 10, 0));
-
-        section.add(titleLabel, BorderLayout.NORTH);
-        section.add(content, BorderLayout.CENTER);
+        titleLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        titleLabel.setBorder(new EmptyBorder(0, 0, 12, 0));
+        section.add(titleLabel);
 
         return section;
-    }
-
-    private JPanel createVerificationStatusContent() {
-        JPanel panel = new JPanel();
-        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
-        panel.setBackground(SECTION_BG);
-
-        addStatusRow(panel, "Signature", result.isSignatureValid());
-        addStatusRow(panel, "Document Integrity", result.isDocumentIntact());
-        addStatusRow(panel, "Certificate Valid", result.isCertificateValid());
-        addStatusRow(panel, "Certificate Trusted", result.isCertificateTrusted());
-        addStatusRow(panel, "Revocation Status", !result.isCertificateRevoked(), result.getRevocationStatus());
-
-        // Timestamp status - show "Not Enabled" if no timestamp present
-        String timestampStatus = getTimestampStatusText();
-        addStatusRow(panel, "Timestamp", result.isTimestampValid(), timestampStatus);
-
-        // LTV status - show "Not Enabled" if LTV not present
-        String ltvStatus = getLTVStatusText();
-        addStatusRow(panel, "Long Term Validation", result.hasLTV(), ltvStatus);
-
-        return panel;
-    }
-
-    private String getTimestampStatusText() {
-        if (result.isTimestampValid()) {
-            return "Valid";
-        } else if (result.getTimestampDate() != null) {
-            // Timestamp present but invalid
-            return "Invalid";
-        } else {
-            // No timestamp in signature
-            return "Not Enabled";
-        }
-    }
-
-    private String getLTVStatusText() {
-        if (result.hasLTV()) {
-            return "Enabled";
-        } else {
-            // LTV not enabled in signature
-            return "Not Enabled";
-        }
     }
 
     private void addStatusRow(JPanel panel, String label, boolean status) {
@@ -281,31 +1001,43 @@ public class SignaturePropertiesDialog extends JDialog {
     }
 
     private void addStatusRow(JPanel panel, String label, boolean status, String customText) {
-        JPanel row = new JPanel(new BorderLayout(10, 0));
+        JPanel row = new JPanel(new GridBagLayout());
         row.setBackground(SECTION_BG);
         row.setMaximumSize(new Dimension(Integer.MAX_VALUE, 28));
+        row.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.anchor = GridBagConstraints.WEST;
+        gbc.insets = new Insets(2, 0, 2, 12);
 
         JLabel labelComp = new JLabel(label + ":");
         labelComp.setFont(new Font("Segoe UI", Font.PLAIN, 13));
         labelComp.setForeground(UIConstants.Colors.TEXT_SECONDARY);
+        labelComp.setPreferredSize(new Dimension(LABEL_WIDTH, labelComp.getPreferredSize().height));
 
-        // Create status panel with icon
-        JPanel statusPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 5, 0));
+        gbc.gridx = 0;
+        gbc.weightx = 0;
+        row.add(labelComp, gbc);
+
+        // Status icon + text
+        JPanel statusPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 0));
         statusPanel.setOpaque(false);
 
         String statusText;
         Color statusColor;
 
         if (customText != null && !customText.isEmpty()) {
-            // Use custom text with appropriate color
             statusText = customText;
+            // Map status text to colors consistently with VerificationStatus enum:
+            // - VALID (green): Valid certificates, successful CRL checks, enabled features
+            // - INVALID (red): Revoked certificates, failed checks
+            // - UNKNOWN (yellow): Cannot verify, not checked, unknown status
             if (customText.contains("Valid") || customText.contains("CRL") || customText.equals("Enabled")) {
                 statusColor = VALID_COLOR;
-            } else if (customText.contains("Not Checked") || customText.equals("Not Enabled")) {
-                statusColor = UIConstants.Colors.TEXT_MUTED; // Gray
             } else if (customText.contains("Revoked")) {
                 statusColor = INVALID_COLOR;
             } else {
+                // All other statuses are UNKNOWN: "Not Checked", "Could not check", "Unknown", "Not Enabled", etc.
                 statusColor = UNKNOWN_COLOR;
             }
         } else {
@@ -313,18 +1045,10 @@ public class SignaturePropertiesDialog extends JDialog {
             statusColor = status ? VALID_COLOR : INVALID_COLOR;
         }
 
-        // Add icon for valid status
-        if (status && customText == null) {
+        if (status && (customText == null || customText.contains("Valid") || customText.contains("CRL"))) {
             ImageIcon icon = IconLoader.loadIcon("green_tick.png", 14, 14);
             if (icon != null) {
-                JLabel iconLabel = new JLabel(icon);
-                statusPanel.add(iconLabel);
-            }
-        } else if (status && customText != null && (customText.contains("Valid") || customText.contains("CRL"))) {
-            ImageIcon icon = IconLoader.loadIcon("green_tick.png", 14, 14);
-            if (icon != null) {
-                JLabel iconLabel = new JLabel(icon);
-                statusPanel.add(iconLabel);
+                statusPanel.add(new JLabel(icon));
             }
         }
 
@@ -333,293 +1057,66 @@ public class SignaturePropertiesDialog extends JDialog {
         valueComp.setForeground(statusColor);
         statusPanel.add(valueComp);
 
-        row.add(labelComp, BorderLayout.WEST);
-        row.add(statusPanel, BorderLayout.EAST);
+        gbc.gridx = 1;
+        gbc.weightx = 1.0;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        row.add(statusPanel, gbc);
 
         panel.add(row);
         panel.add(Box.createRigidArea(new Dimension(0, 6)));
     }
 
-    private JPanel createSignatureInfoContent() {
-        JPanel panel = new JPanel();
-        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
-        panel.setBackground(SECTION_BG);
-
-        if (result.getSignDate() != null) {
-            addDetailRow(panel, "Signed On", DATE_FORMAT.format(result.getSignDate()));
-        }
-
-        if (result.getReason() != null && !result.getReason().isEmpty()) {
-            addDetailRow(panel, "Reason", result.getReason());
-        }
-
-        if (result.getLocation() != null && !result.getLocation().isEmpty()) {
-            addDetailRow(panel, "Location", result.getLocation());
-        }
-
-        if (result.getContactInfo() != null && !result.getContactInfo().isEmpty()) {
-            addDetailRow(panel, "Contact", result.getContactInfo());
-        }
-
-        if (result.getSignatureAlgorithm() != null) {
-            addDetailRow(panel, "Algorithm", result.getSignatureAlgorithm());
-        }
-
-        // Timestamp information - show even if not valid to explain why
-        if (result.getTimestampDate() != null || result.isTimestampValid()) {
-            panel.add(Box.createRigidArea(new Dimension(0, 8)));
-            addSectionSubheader(panel, "Timestamp Information");
-
-            if (result.getTimestampDate() != null) {
-                addDetailRow(panel, "Timestamp Date", DATE_FORMAT.format(result.getTimestampDate()));
-            }
-
-            if (result.getTimestampAuthority() != null) {
-                addDetailRow(panel, "Timestamp Authority", result.getTimestampAuthority());
-            }
-
-            // Timestamp status explanation
-            if (result.isTimestampValid()) {
-                addDetailRow(panel, "Status", "Verified");
-            } else if (result.getTimestampDate() != null) {
-                addDetailRow(panel, "Status", "Could not verify timestamp");
-            }
-        } else {
-            // No timestamp at all
-            panel.add(Box.createRigidArea(new Dimension(0, 8)));
-            addSectionSubheader(panel, "Timestamp Information");
-            addDetailRow(panel, "Status", "No timestamp");
-        }
-
-        // Certification Information (PDF viewer style)
-        panel.add(Box.createRigidArea(new Dimension(0, 8)));
-        addSectionSubheader(panel, "Certification Information");
-
-        if (result.isCertificationSignature()) {
-            addDetailRow(panel, "Type", "Certified Signature");
-            addDetailRow(panel, "Can Add More Signatures",
-                result.getCertificationLevel().allowsSignatures() ? "Yes" : "No");
-
-            // Explain what this certification level means
-            String explanation = getCertificationLevelExplanation(result.getCertificationLevel());
-            addDetailRow(panel, "What This Means", explanation);
-        } else {
-            addDetailRow(panel, "Type", "Regular Signature");
-            addDetailRow(panel, "Can Add More Signatures", "Yes");
-            addDetailRow(panel, "What This Means",
-                "This is a regular signature. You can add more signatures to this document.");
-        }
-
-        return panel;
-    }
-
-    /**
-     * Gets user-friendly explanation for certification level.
-     */
-    private String getCertificationLevelExplanation(com.codemuni.model.CertificationLevel level) {
-        switch (level) {
-            case NO_CHANGES_ALLOWED:
-                return "This document is certified. No changes are allowed. " +
-                       "Changing the document will make all signatures invalid.";
-            case FORM_FILLING_AND_ANNOTATION_CERTIFIED:
-                return "This document is certified. You can fill forms and add annotations. " +
-                       "You cannot add more signatures.";
-            case FORM_FILLING_CERTIFIED:
-                return "This document is certified. You can only fill forms. " +
-                       "You cannot add more signatures.";
-            case NOT_CERTIFIED:
-            default:
-                return "This is a regular signature. You can add more signatures to this document.";
-        }
-    }
-
-    private JPanel createCertificateInfoContent() {
-        JPanel panel = new JPanel();
-        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
-        panel.setBackground(SECTION_BG);
-
-        if (result.getCertificateSubject() != null) {
-            addDetailRow(panel, "Subject", result.getCertificateSubject());
-        }
-
-        if (result.getCertificateIssuer() != null) {
-            addDetailRow(panel, "Issuer", result.getCertificateIssuer());
-        }
-
-        // Certificate serial number in hex format
-        if (result.getSignerCertificate() != null) {
-            String serialHex = result.getSignerCertificate().getSerialNumber().toString(16).toUpperCase();
-            addDetailRow(panel, "Serial Number", serialHex);
-        }
-
-        if (result.getCertificateValidFrom() != null) {
-            addDetailRow(panel, "Valid From", DATE_FORMAT.format(result.getCertificateValidFrom()));
-        }
-
-        if (result.getCertificateValidTo() != null) {
-            addDetailRow(panel, "Valid To", DATE_FORMAT.format(result.getCertificateValidTo()));
-        }
-
-        // Certificate version
-        if (result.getSignerCertificate() != null) {
-            addDetailRow(panel, "Version", "V" + result.getSignerCertificate().getVersion());
-        }
-
-        // Signature algorithm with OID
-        if (result.getSignerCertificate() != null) {
-            String sigAlg = result.getSignerCertificate().getSigAlgName();
-            String sigAlgOID = result.getSignerCertificate().getSigAlgOID();
-            addDetailRow(panel, "Signature Algorithm", sigAlg + " (" + sigAlgOID + ")");
-        }
-
-        // Public key algorithm and size
-        if (result.getSignerCertificate() != null) {
-            java.security.PublicKey pubKey = result.getSignerCertificate().getPublicKey();
-            String keyAlgorithm = pubKey.getAlgorithm();
-            int keySize = CertificateUtils.getKeySize(pubKey);
-            addDetailRow(panel, "Public Key", keyAlgorithm + " (" + keySize + " bits)");
-        }
-
-        // Key usage
-        if (result.getSignerCertificate() != null) {
-            java.util.List<String> keyUsages = CertificateUtils.getKeyUsageStrings(result.getSignerCertificate());
-            if (!keyUsages.isEmpty()) {
-                addDetailRow(panel, "Key Usage", String.join(", ", keyUsages));
-            }
-        }
-
-        // Extended key usage
-        if (result.getSignerCertificate() != null) {
-            java.util.List<String> extKeyUsages = CertificateUtils.getExtendedKeyUsageStrings(result.getSignerCertificate());
-            if (!extKeyUsages.isEmpty()) {
-                addDetailRow(panel, "Extended Key Usage", String.join(", ", extKeyUsages));
-            }
-        }
-
-        // Certificate chain info
-        if (result.getCertificateChain() != null && !result.getCertificateChain().isEmpty()) {
-            panel.add(Box.createRigidArea(new Dimension(0, 8)));
-            addSectionSubheader(panel, "Certificate Chain");
-            addDetailRow(panel, "Chain Length", String.valueOf(result.getCertificateChain().size()) + " certificate(s)");
-
-            // Show each certificate in chain with proper hierarchy
-            int chainSize = result.getCertificateChain().size();
-
-            for (int i = 0; i < chainSize; i++) {
-                java.security.cert.X509Certificate cert = result.getCertificateChain().get(i);
-                String subjectCN = X509SubjectUtils.extractCommonNameFromDN(cert.getSubjectDN().toString());
-                String issuerCN = X509SubjectUtils.extractCommonNameFromDN(cert.getIssuerDN().toString());
-
-                // Determine role using CertificateUtils
-                CertificateUtils.CertificateRole certRole = CertificateUtils.determineCertificateRole(cert);
-                String role = certRole.getDisplayName();
-
-                // Format: [index] Role: CN (issued by: Issuer CN)
-                String displayText;
-                if (certRole == CertificateUtils.CertificateRole.END_ENTITY) {
-                    // For end entity, show who issued it
-                    displayText = subjectCN + " (Issued by: " + issuerCN + ")";
-                } else {
-                    // For CAs, just show the name
-                    displayText = subjectCN;
-                }
-
-                String label = "[" + i + "] " + role + ":";
-                addDetailRow(panel, "  " + label, displayText);
-            }
-        }
-
-        return panel;
-    }
-
-
-    private JPanel createDocumentInfoContent() {
-        JPanel panel = new JPanel();
-        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
-        panel.setBackground(SECTION_BG);
-
-        if (result.getTotalRevisions() > 0) {
-            addDetailRow(panel, "Signature Revision", result.getRevision() + " of " + result.getTotalRevisions());
-            addDetailRow(panel, "Covers Whole Document", result.isCoversWholeDocument() ? "Yes" : "No");
-        }
-
-        if (result.getPageNumber() > 0) {
-            addDetailRow(panel, "Signature Location", "Page " + result.getPageNumber());
-        }
-
-        return panel;
-    }
-
-    private JPanel createInfoContent() {
-        JPanel panel = new JPanel();
-        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
-        panel.setBackground(SECTION_BG);
-
-        for (String info : result.getVerificationInfo()) {
-            addMessageRow(panel, info, UIConstants.Colors.STATUS_INFO); // Blue color for info
-        }
-
-        return panel;
-    }
-
-    private JPanel createWarningsContent() {
-        JPanel panel = new JPanel();
-        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
-        panel.setBackground(SECTION_BG);
-
-        for (String warning : result.getVerificationWarnings()) {
-            addMessageRow(panel, warning, UNKNOWN_COLOR);
-        }
-
-        return panel;
-    }
-
-    private JPanel createErrorsContent() {
-        JPanel panel = new JPanel();
-        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
-        panel.setBackground(SECTION_BG);
-
-        for (String error : result.getVerificationErrors()) {
-            addMessageRow(panel, error, INVALID_COLOR);
-        }
-
-        return panel;
-    }
-
-    private void addSectionSubheader(JPanel panel, String text) {
-        JLabel label = new JLabel(text);
-        label.setFont(UIConstants.Fonts.SMALL_PLAIN);
-        label.setForeground(UIConstants.Colors.TEXT_TERTIARY);
-        label.setAlignmentX(Component.LEFT_ALIGNMENT);
-        panel.add(label);
-        panel.add(Box.createRigidArea(new Dimension(0, 4)));
-    }
-
     private void addDetailRow(JPanel panel, String label, String value) {
+        addDetailRow(panel, label, value, UIConstants.Colors.TEXT_MUTED);
+    }
+
+    private void addColoredDetailRow(JPanel panel, String label, String value, Color valueColor) {
+        addDetailRow(panel, label, value, valueColor);
+    }
+
+    private void addDetailRow(JPanel panel, String label, String value, Color valueColor) {
         if (value == null || value.isEmpty()) {
             return;
         }
 
-        JPanel row = new JPanel(new BorderLayout(12, 2));
+        JPanel row = new JPanel(new GridBagLayout());
         row.setBackground(SECTION_BG);
         row.setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
+        row.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.anchor = GridBagConstraints.NORTHWEST;
+        gbc.insets = new Insets(2, 0, 2, 12);
 
         JLabel labelComp = new JLabel(label + ":");
         labelComp.setFont(UIConstants.Fonts.NORMAL_BOLD);
         labelComp.setForeground(UIConstants.Colors.TEXT_SECONDARY);
-        labelComp.setVerticalAlignment(SwingConstants.TOP);
+        labelComp.setPreferredSize(new Dimension(LABEL_WIDTH, labelComp.getPreferredSize().height));
 
+        gbc.gridx = 0;
+        gbc.gridy = 0;
+        gbc.weightx = 0;
+        gbc.fill = GridBagConstraints.NONE;
+        row.add(labelComp, gbc);
+
+        // Create text area with proper wrapping
         JTextArea valueComp = new JTextArea(value);
         valueComp.setFont(UIConstants.Fonts.NORMAL_PLAIN);
-        valueComp.setForeground(UIConstants.Colors.TEXT_MUTED);
+        valueComp.setForeground(valueColor);
         valueComp.setBackground(SECTION_BG);
         valueComp.setLineWrap(true);
         valueComp.setWrapStyleWord(true);
         valueComp.setEditable(false);
         valueComp.setBorder(null);
 
-        row.add(labelComp, BorderLayout.WEST);
-        row.add(valueComp, BorderLayout.CENTER);
+        // Calculate appropriate rows for text area based on content length
+        int estimatedRows = Math.max(1, value.length() / 60);
+        valueComp.setRows(Math.min(estimatedRows, 10));
+
+        gbc.gridx = 1;
+        gbc.weightx = 1.0;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        row.add(valueComp, gbc);
 
         panel.add(row);
         panel.add(Box.createRigidArea(new Dimension(0, 8)));
@@ -641,201 +1138,50 @@ public class SignaturePropertiesDialog extends JDialog {
         panel.add(Box.createRigidArea(new Dimension(0, 4)));
     }
 
-    private JPanel createButtonPanel() {
-        JPanel panel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
-        panel.setBackground(BG_COLOR);
+    // ====================================================================================
+    // HELPER METHODS - CERTIFICATE CHAIN
+    // ====================================================================================
 
-        // Export certificate button
-        if (result.getSignerCertificate() != null) {
-            JButton exportCertBtn = new JButton("Export Certificate");
-            exportCertBtn.setFont(UIConstants.Fonts.NORMAL_PLAIN);
-            exportCertBtn.setPreferredSize(UIConstants.buttonSize(150));
-            exportCertBtn.setFocusPainted(false);
-            exportCertBtn.addActionListener(e -> exportCertificate());
-            panel.add(exportCertBtn);
+    private String buildTreePrefix(int depth, boolean isLast) {
+        if (depth == 0) {
+            return "[ROOT] ";
         }
 
-        // View full certificate button
-        if (result.getSignerCertificate() != null) {
-            JButton viewCertBtn = new JButton("View Certificate");
-            viewCertBtn.setFont(UIConstants.Fonts.NORMAL_PLAIN);
-            viewCertBtn.setPreferredSize(UIConstants.buttonSize(140));
-            viewCertBtn.setFocusPainted(false);
-            viewCertBtn.addActionListener(e -> viewFullCertificate());
-            panel.add(viewCertBtn);
+        StringBuilder prefix = new StringBuilder();
+        for (int d = 1; d < depth; d++) {
+            prefix.append("│   ");
         }
 
-        // Close button
-        JButton closeBtn = new JButton("Close");
-        closeBtn.setFont(UIConstants.Fonts.NORMAL_BOLD);
-        closeBtn.setPreferredSize(UIConstants.buttonSize(100));
-        closeBtn.setFocusPainted(false);
-        closeBtn.addActionListener(e -> dispose());
-        panel.add(closeBtn);
+        if (isLast) {
+            prefix.append("└── ");
+        } else {
+            prefix.append("├── ");
+        }
 
-        return panel;
+        return prefix.toString();
     }
 
-    /**
-     * Exports the signer certificate to PEM format.
-     */
-    private void exportCertificate() {
-        try {
-            java.security.cert.X509Certificate cert = result.getSignerCertificate();
-            if (cert == null) {
-                JOptionPane.showMessageDialog(this,
-                    "No certificate available to export",
-                    "Export Error",
-                    JOptionPane.ERROR_MESSAGE);
-                return;
-            }
-
-            JFileChooser chooser = new JFileChooser();
-            chooser.setDialogTitle("Save Certificate");
-
-            // Default filename from CN
-            String cn = X509SubjectUtils.extractCommonNameFromDN(cert.getSubjectDN().toString());
-            String defaultName = cn.replaceAll("[^a-zA-Z0-9]", "_") + "_certificate.pem";
-            chooser.setSelectedFile(new File(defaultName));
-
-            // Add file filters
-            chooser.addChoosableFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("PEM Certificate (*.pem)", "pem"));
-            chooser.addChoosableFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("DER Certificate (*.cer, *.der)", "cer", "der"));
-            chooser.setFileFilter(chooser.getChoosableFileFilters()[0]); // Default to PEM
-
-            if (chooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
-                File outputFile = chooser.getSelectedFile();
-                boolean isPEM = chooser.getFileFilter().getDescription().contains("PEM");
-
-                // Add extension if not present
-                if (isPEM && !outputFile.getName().toLowerCase().endsWith(".pem")) {
-                    outputFile = new File(outputFile.getAbsolutePath() + ".pem");
-                } else if (!isPEM && !outputFile.getName().toLowerCase().matches(".*\\.(cer|der)$")) {
-                    outputFile = new File(outputFile.getAbsolutePath() + ".cer");
-                }
-
-                if (isPEM) {
-                    // Export as PEM
-                    String pemCert = "-----BEGIN CERTIFICATE-----\n" +
-                                   java.util.Base64.getMimeEncoder(64, new byte[]{'\n'})
-                                       .encodeToString(cert.getEncoded()) +
-                                   "\n-----END CERTIFICATE-----\n";
-                    java.nio.file.Files.write(outputFile.toPath(), pemCert.getBytes());
-                } else {
-                    // Export as DER
-                    java.nio.file.Files.write(outputFile.toPath(), cert.getEncoded());
-                }
-
-                JOptionPane.showMessageDialog(this,
-                    "Certificate exported successfully to:\n" + outputFile.getAbsolutePath(),
-                    "Export Success",
-                    JOptionPane.INFORMATION_MESSAGE);
-            }
-        } catch (Exception ex) {
-            JOptionPane.showMessageDialog(this,
-                "Failed to export certificate:\n" + ex.getMessage(),
-                "Export Error",
-                JOptionPane.ERROR_MESSAGE);
+    private Color getCertificateColorByDepth(int depth, int totalDepth) {
+        if (depth == 0) {
+            return CERT_ROOT_COLOR;
+        } else if (depth == totalDepth - 1) {
+            return CERT_END_ENTITY_COLOR;
+        } else {
+            return CERT_INTERMEDIATE_COLOR;
         }
     }
 
-    /**
-     * Shows full certificate details in a text dialog.
-     */
-    private void viewFullCertificate() {
-        try {
-            java.security.cert.X509Certificate cert = result.getSignerCertificate();
-            if (cert == null) {
-                JOptionPane.showMessageDialog(this,
-                    "No certificate available",
-                    "View Error",
-                    JOptionPane.ERROR_MESSAGE);
-                return;
-            }
+    // ====================================================================================
+    // HELPER METHODS - STATUS & TEXT
+    // ====================================================================================
 
-            // Create dialog
-            JDialog certDialog = new JDialog(this, "Certificate Details", true);
-            certDialog.setSize(800, 600);
-            certDialog.setLocationRelativeTo(this);
-
-            // Create text area with full certificate details
-            JTextArea textArea = new JTextArea();
-            textArea.setFont(UIConstants.Fonts.MONOSPACE);
-            textArea.setEditable(false);
-            textArea.setBackground(new Color(30, 30, 30));
-            textArea.setForeground(UIConstants.Colors.TEXT_PRIMARY);
-            textArea.setCaretColor(Color.WHITE);
-
-            // Build certificate details text
-            StringBuilder details = new StringBuilder();
-            details.append("X.509 Certificate Details\n");
-            details.append(repeatChar('=', 80)).append("\n\n");
-
-            details.append("Version: ").append(cert.getVersion()).append("\n");
-            details.append("Serial Number: ").append(cert.getSerialNumber().toString(16).toUpperCase()).append("\n\n");
-
-            details.append("Subject:\n  ").append(cert.getSubjectDN().toString()).append("\n\n");
-            details.append("Issuer:\n  ").append(cert.getIssuerDN().toString()).append("\n\n");
-
-            details.append("Valid From: ").append(DATE_FORMAT.format(cert.getNotBefore())).append("\n");
-            details.append("Valid To: ").append(DATE_FORMAT.format(cert.getNotAfter())).append("\n\n");
-
-            details.append("Signature Algorithm: ").append(cert.getSigAlgName()).append("\n");
-            details.append("Signature Algorithm OID: ").append(cert.getSigAlgOID()).append("\n\n");
-
-            details.append("Public Key Algorithm: ").append(cert.getPublicKey().getAlgorithm()).append("\n");
-            details.append("Public Key Size: ").append(CertificateUtils.getKeySize(cert.getPublicKey())).append(" bits\n\n");
-
-            // Key usage
-            java.util.List<String> keyUsages = CertificateUtils.getKeyUsageStrings(cert);
-            if (!keyUsages.isEmpty()) {
-                details.append("Key Usage: ").append(String.join(", ", keyUsages)).append("\n");
-            }
-
-            // Extended key usage
-            java.util.List<String> extKeyUsages = CertificateUtils.getExtendedKeyUsageStrings(cert);
-            if (!extKeyUsages.isEmpty()) {
-                details.append("Extended Key Usage: ").append(String.join(", ", extKeyUsages)).append("\n");
-            }
-
-            details.append("\n").append(repeatChar('-', 80)).append("\n");
-            details.append("PEM Encoded:\n").append(repeatChar('-', 80)).append("\n\n");
-            details.append("-----BEGIN CERTIFICATE-----\n");
-            details.append(java.util.Base64.getMimeEncoder(64, new byte[]{'\n'})
-                .encodeToString(cert.getEncoded()));
-            details.append("\n-----END CERTIFICATE-----\n");
-
-            textArea.setText(details.toString());
-            textArea.setCaretPosition(0);
-
-            JScrollPane scrollPane = new JScrollPane(textArea);
-            scrollPane.setBorder(UIConstants.Padding.SMALL);
-
-            // Button panel
-            JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-            buttonPanel.setBackground(BG_COLOR);
-            JButton copyBtn = new JButton("Copy to Clipboard");
-            copyBtn.addActionListener(e -> {
-                java.awt.datatransfer.StringSelection selection = new java.awt.datatransfer.StringSelection(textArea.getText());
-                java.awt.Toolkit.getDefaultToolkit().getSystemClipboard().setContents(selection, selection);
-                JOptionPane.showMessageDialog(certDialog, "Certificate details copied to clipboard", "Copied", JOptionPane.INFORMATION_MESSAGE);
-            });
-            JButton closeBtn = new JButton("Close");
-            closeBtn.addActionListener(e -> certDialog.dispose());
-            buttonPanel.add(copyBtn);
-            buttonPanel.add(closeBtn);
-
-            certDialog.setLayout(new BorderLayout());
-            certDialog.add(scrollPane, BorderLayout.CENTER);
-            certDialog.add(buttonPanel, BorderLayout.SOUTH);
-
-            certDialog.setVisible(true);
-
-        } catch (Exception ex) {
-            JOptionPane.showMessageDialog(this,
-                "Failed to view certificate:\n" + ex.getMessage(),
-                "View Error",
-                JOptionPane.ERROR_MESSAGE);
+    private String getTimestampStatusText() {
+        if (result.isTimestampValid()) {
+            return "Valid";
+        } else if (result.getTimestampDate() != null) {
+            return "Invalid";
+        } else {
+            return "Not Enabled";
         }
     }
 
@@ -853,15 +1199,14 @@ public class SignaturePropertiesDialog extends JDialog {
     }
 
     /**
-     * Java 8 compatible repeat character method.
-     * Replacement for String.repeat() which is available only from Java 11+
+     * Repeats a character n times (Java 8 compatible).
+     * Replaces String.repeat() which is only available in Java 11+.
      */
-    private String repeatChar(char c, int count) {
+    private String repeatChar(char ch, int count) {
         StringBuilder sb = new StringBuilder(count);
         for (int i = 0; i < count; i++) {
-            sb.append(c);
+            sb.append(ch);
         }
         return sb.toString();
     }
-
 }

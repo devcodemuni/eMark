@@ -51,9 +51,25 @@ public final class CertificateUtils {
     }
 
     // Check if cert is self-signed (subject == issuer)
+    // Uses X500Principal for proper DN comparison instead of string comparison
     private static boolean isSelfSigned(X509Certificate cert) {
         if (cert == null) return false;
-        return cert.getSubjectDN().equals(cert.getIssuerDN());
+
+        // Use X500Principal for normalized DN comparison
+        boolean dnMatch = cert.getSubjectX500Principal().equals(cert.getIssuerX500Principal());
+
+        if (!dnMatch) {
+            return false;
+        }
+
+        // Verify signature to confirm it's truly self-signed
+        try {
+            cert.verify(cert.getPublicKey());
+            return true;
+        } catch (Exception e) {
+            log.debug("Certificate has matching subject/issuer but signature verification failed", e);
+            return false;
+        }
     }
 
     // Check if cert is a CA using Basic Constraints (-1 = not CA, >= 0 = CA)

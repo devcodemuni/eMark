@@ -475,6 +475,14 @@ public class SignModeController {
                         // Clear existing field name to ensure we create a new signature field
                         signerController.setExistingFieldName(null);
 
+                        // Set callback to reset UI state if user cancels save
+                        signerController.setOnSaveCancelled(new Runnable() {
+                            @Override
+                            public void run() {
+                                resetSignModeUI();
+                            }
+                        });
+
                         signerController.startSigningService();
 
                         resetSignModeUI();
@@ -591,6 +599,14 @@ public class SignModeController {
                 // Clear coordinates and page number to ensure we use the existing field only
                 signerController.setCoordinates(null);
                 signerController.setPageNumber(0);
+
+                // Set callback to reset UI state if user cancels save
+                signerController.setOnSaveCancelled(new Runnable() {
+                    @Override
+                    public void run() {
+                        resetSignModeUI();
+                    }
+                });
 
                 // Start signing service - this will open certificate selection and appearance dialog
                 signerController.startSigningService();

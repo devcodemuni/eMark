@@ -56,6 +56,10 @@ public class SignerController {
         signerService = new PdfSignerService();
     }
 
+    public void setOnSaveCancelled(Runnable onSaveCancelled) {
+        signerService.setOnSaveCancelled(onSaveCancelled);
+    }
+
 
     public void setSelectedFile(File selectedFile) {
         this.selectedFile = selectedFile;
