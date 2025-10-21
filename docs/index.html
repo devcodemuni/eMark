@@ -61,7 +61,7 @@
         <meta property="og:locale" content="en_US" />
         <meta
             property="og:image"
-            content="https://devcodemuni.github.io/eMark/assets/og-image.svg"
+            content="https://devcodemuni.github.io/eMark/assets/og-image.png"
         />
         <meta property="og:image:width" content="1200" />
         <meta property="og:image:height" content="630" />
@@ -287,7 +287,8 @@
 
         <!-- Favicons -->
         <link rel="icon" href="images/favicon.ico" type="image/x-icon" />
-        <link rel="apple-touch-icon" sizes="180x180" href="images/logo.png" />
+        <link rel="icon" type="image/png" href="images/logo.png">
+        <link rel="apple-touch-icon" href="images/logo.png">
         <link rel="manifest" href="manifest.json" />
 
         <!-- PWA Meta Tags -->
@@ -933,18 +934,19 @@
     </head>
 
     <body class="dark">
-        <!-- Header -->
-        <header class="sticky top-0 z-50 glass">
-            <nav class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+        <!-- Main Header / Navigation Bar -->
+        <header class="sticky top-0 z-50 glass" role="banner">
+            <nav class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4" role="navigation" aria-label="Main navigation">
                 <div class="flex items-center justify-between">
-                    <!-- Logo -->
+                    <!-- Logo & Branding -->
                     <div class="flex items-center space-x-3">
                         <div
                             class="w-11 h-11 rounded-xl bg-gradient-to-br from-purple-600 to-indigo-600 flex items-center justify-center shadow-lg"
+                            aria-hidden="true"
                         >
                             <img
                                 src="images/logo.png"
-                                alt="eMark Logo"
+                                alt="eMark - Professional Adobe Reader DC Alternative for PDF Digital Signing and Verification"
                                 class="w-full h-full object-contain"
                             />
                         </div>
@@ -958,8 +960,8 @@
                         </div>
                     </div>
 
-                    <!-- Navigation -->
-                    <div class="hidden md:flex items-center space-x-8">
+                    <!-- Main Navigation Links -->
+                    <div class="hidden md:flex items-center space-x-8" role="menubar">
                         <a
                             href="#features"
                             class="text-gray-300 hover:text-white transition-colors font-medium"
@@ -1015,8 +1017,11 @@
                         <button
                             id="mobile-menu-btn"
                             class="md:hidden text-gray-300 hover:text-white"
+                            aria-label="Toggle mobile menu"
+                            aria-expanded="false"
+                            aria-controls="mobile-menu"
                         >
-                            <i class="fas fa-bars text-xl"></i>
+                            <i class="fas fa-bars text-xl" aria-hidden="true"></i>
                         </button>
                     </div>
                 </div>
@@ -1173,7 +1178,7 @@
                                 class="glass rounded-lg p-4 text-center card-hover"
                             >
                                 <div class="text-3xl font-bold gradient-text">
-                                    5+
+                                    4
                                 </div>
                                 <div class="text-sm text-gray-400">
                                     Certificate Types
@@ -1441,24 +1446,6 @@
                                 </h4>
                                 <p class="text-sm text-gray-400">
                                     Windows Certificate Store integration
-                                </p>
-                            </div>
-                        </div>
-
-                        <div class="flex items-start space-x-4">
-                            <div
-                                class="w-12 h-12 rounded-lg bg-purple-500/20 flex items-center justify-center flex-shrink-0"
-                            >
-                                <i
-                                    class="fas fa-lock text-purple-400 text-xl"
-                                ></i>
-                            </div>
-                            <div>
-                                <h4 class="font-semibold mb-1 text-white">
-                                    Enterprise PKI
-                                </h4>
-                                <p class="text-sm text-gray-400">
-                                    Full PKI infrastructure support
                                 </p>
                             </div>
                         </div>

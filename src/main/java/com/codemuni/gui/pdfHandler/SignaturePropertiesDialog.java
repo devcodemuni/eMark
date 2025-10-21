@@ -314,23 +314,56 @@ public class SignaturePropertiesDialog extends JDialog {
         return scrollPane;
     }
 
+    /**
+     * Creates verification status panel according to PDF/ISO 32000 standards.
+     *
+     * Standard PDF Signature Verification Checks (in order):
+     * 1. Signature Valid - Cryptographic signature verification
+     * 2. Document Integrity - Document not modified after signing
+     * 3. Certificate Valid - Certificate was valid at signing time
+     * 4. Certificate Trusted - Certificate chains to trusted root
+     * 5. Revocation Status - Certificate not revoked at signing time
+     * 6. Timestamp - Trusted signing time (optional, recommended)
+     * 7. Long Term Validation - Embedded validation data for future verification (optional)
+     */
     private JPanel createVerificationStatusPanel() {
-        JPanel section = createSection("Verification Status");
+        JPanel section = createSection("Verification Status (PDF/ISO 32000)");
 
-        addStatusRow(section, "Signature", result.isSignatureValid());
-        addStatusRow(section, "Document Integrity", result.isDocumentIntact());
-        addStatusRow(section, "Certificate Valid", result.isCertificateValid());
-        addStatusRow(section, "Certificate Trusted", result.isCertificateTrusted());
-        addStatusRow(section, "Revocation Status", !result.isCertificateRevoked(), result.getRevocationStatus());
+        // Core verification checks - REQUIRED for valid signature
+        addStatusRow(section, "Signature Valid", result.isSignatureValid());
+        addStatusRowWithTooltip(section, "Document Integrity", result.isDocumentIntact(),
+                "Document has not been modified after signing");
 
-        // Timestamp
+        addStatusRowWithTooltip(section, "Certificate Valid", result.isCertificateValid(),
+                "Certificate was valid at signing time");
+
+        addStatusRowWithTooltip(section, "Certificate Trusted", result.isCertificateTrusted(),
+                "Certificate chains to a trusted root authority");
+
+        // Revocation status: only show as valid if actually verified
+        boolean revocationActuallyValid = isRevocationActuallyValid(result);
+        String revocationTooltip = revocationActuallyValid ?
+                "Certificate revocation verified - not revoked" :
+                "Revocation status: " + result.getRevocationStatus();
+        addStatusRowWithTooltip(section, "Not Revoked", revocationActuallyValid,
+                result.getRevocationStatus(), revocationTooltip);
+
+        // Optional but recommended features
         String timestampStatus = getTimestampStatusText();
         boolean timestampValid = result.isTimestampValid();
-        addStatusRow(section, "Timestamp", timestampValid, timestampStatus);
+        String timestampTooltip = timestampValid ?
+                "Signature has a valid trusted timestamp" :
+                "Timestamp proves exact signing time (recommended by CCA)";
+        addStatusRowWithTooltip(section, "Timestamp", timestampValid,
+                timestampStatus, timestampTooltip);
 
-        // LTV
+        // LTV - Optional feature for long-term verification
         String ltvStatus = result.hasLTV() ? "Enabled" : "Not Enabled";
-        addStatusRow(section, "Long Term Validation", result.hasLTV(), ltvStatus);
+        String ltvTooltip = result.hasLTV() ?
+                "Document contains embedded validation data (CRL/OCSP)" :
+                "Long-term validation data ensures signature can be verified in the future";
+        addStatusRowWithTooltip(section, "Long Term Validation", result.hasLTV(),
+                ltvStatus, ltvTooltip);
 
         return section;
     }
@@ -1000,6 +1033,29 @@ public class SignaturePropertiesDialog extends JDialog {
         addStatusRow(panel, label, status, null);
     }
 
+    private void addStatusRowWithTooltip(JPanel panel, String label, boolean status, String tooltip) {
+        addStatusRowWithTooltip(panel, label, status, null, tooltip);
+    }
+
+    private void addStatusRowWithTooltip(JPanel panel, String label, boolean status, String customText, String tooltip) {
+        // Use existing addStatusRow method
+        addStatusRow(panel, label, status, customText);
+
+        // Add tooltip to the last added row if tooltip is provided
+        if (tooltip != null && !tooltip.isEmpty() && panel.getComponentCount() >= 2) {
+            Component lastRow = panel.getComponent(panel.getComponentCount() - 2); // -2 because rigid area is added after
+            if (lastRow instanceof JPanel) {
+                ((JPanel) lastRow).setToolTipText(tooltip);
+                // Also set tooltip on child components for better UX
+                for (Component child : ((JPanel) lastRow).getComponents()) {
+                    if (child instanceof JComponent) {
+                        ((JComponent) child).setToolTipText(tooltip);
+                    }
+                }
+            }
+        }
+    }
+
     private void addStatusRow(JPanel panel, String label, boolean status, String customText) {
         JPanel row = new JPanel(new GridBagLayout());
         row.setBackground(SECTION_BG);
@@ -1032,12 +1088,16 @@ public class SignaturePropertiesDialog extends JDialog {
             // - VALID (green): Valid certificates, successful CRL checks, enabled features
             // - INVALID (red): Revoked certificates, failed checks
             // - UNKNOWN (yellow): Cannot verify, not checked, unknown status
-            if (customText.contains("Valid") || customText.contains("CRL") || customText.equals("Enabled")) {
-                statusColor = VALID_COLOR;
+            //
+            // IMPORTANT: Check for "Validity Unknown" and "Not Checked" first before checking "Valid"
+            if (customText.equals("Not Checked") || customText.contains("Validity Unknown") || customText.contains("Unknown")) {
+                statusColor = UNKNOWN_COLOR;
             } else if (customText.contains("Revoked")) {
                 statusColor = INVALID_COLOR;
+            } else if (customText.contains("Valid") || customText.contains("CRL") || customText.equals("Enabled")) {
+                statusColor = VALID_COLOR;
             } else {
-                // All other statuses are UNKNOWN: "Not Checked", "Could not check", "Unknown", "Not Enabled", etc.
+                // All other statuses are UNKNOWN
                 statusColor = UNKNOWN_COLOR;
             }
         } else {
@@ -1045,7 +1105,12 @@ public class SignaturePropertiesDialog extends JDialog {
             statusColor = status ? VALID_COLOR : INVALID_COLOR;
         }
 
-        if (status && (customText == null || customText.contains("Valid") || customText.contains("CRL"))) {
+        // Show green tick only if status is true AND it's not "Validity Unknown" or "Not Checked"
+        boolean showGreenTick = status &&
+                                (customText == null ||
+                                 (customText.contains("Valid") && !customText.contains("Unknown") && !customText.equals("Not Checked")) ||
+                                 customText.contains("CRL"));
+        if (showGreenTick) {
             ImageIcon icon = IconLoader.loadIcon("green_tick.png", 14, 14);
             if (icon != null) {
                 statusPanel.add(new JLabel(icon));
@@ -1174,6 +1239,41 @@ public class SignaturePropertiesDialog extends JDialog {
     // ====================================================================================
     // HELPER METHODS - STATUS & TEXT
     // ====================================================================================
+
+    /**
+     * Determines if revocation status is actually valid (verified as not revoked).
+     * Only returns true if revocation was ACTUALLY CHECKED and certificate is valid.
+     * Returns false for "Not Checked", "Validity Unknown", etc.
+     *
+     * @param result Verification result
+     * @return true only if revocation was verified and certificate is not revoked
+     */
+    private boolean isRevocationActuallyValid(SignatureVerificationResult result) {
+        // Certificate is revoked - definitely not valid
+        if (result.isCertificateRevoked()) {
+            return false;
+        }
+
+        // Certificate is NOT revoked, but was revocation actually checked?
+        String revocationStatus = result.getRevocationStatus();
+        if (revocationStatus == null || revocationStatus.isEmpty()) {
+            return false; // No status = not checked
+        }
+
+        // Only return true if status explicitly contains "Valid"
+        // This includes:
+        // - "Valid (Embedded OCSP)"
+        // - "Valid (Embedded CRL)"
+        // - "Valid (Live OCSP)"
+        // - "Valid (Revoked after signing, has timestamp)"
+        //
+        // This excludes:
+        // - "Not Checked"
+        // - "Validity Unknown"
+        // - "Validity Unknown (Network Error)"
+        // - "Validity Unknown (Check Failed)"
+        return revocationStatus.contains("Valid");
+    }
 
     private String getTimestampStatusText() {
         if (result.isTimestampValid()) {

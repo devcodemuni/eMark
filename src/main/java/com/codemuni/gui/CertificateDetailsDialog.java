@@ -1,6 +1,7 @@
 package com.codemuni.gui;
 
-import org.bouncycastle.util.encoders.Base64;
+import com.codemuni.core.keyStoresProvider.X509SubjectUtils;
+import com.codemuni.utils.StringFormatUtils;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -145,10 +146,7 @@ public class CertificateDetailsDialog extends JDialog {
         pemArea.setMargin(new Insets(0, 0, 0, 0));
 
         try {
-            String pem = "-----BEGIN CERTIFICATE-----\n" +
-                    formatBase64(Base64.encode(certificate.getEncoded())) +
-                    "\n-----END CERTIFICATE-----";
-            pemArea.setText(pem);
+            pemArea.setText(StringFormatUtils.toPemFormat(certificate));
         } catch (CertificateEncodingException e) {
             pemArea.setText("Error encoding certificate: " + e.getMessage());
         }
@@ -197,8 +195,7 @@ public class CertificateDetailsDialog extends JDialog {
     }
 
     private String formatDN(String dn) {
-        // Simple formatting for DN - can be enhanced
-        return dn.replace(", ", "\n");
+        return X509SubjectUtils.formatDN(dn);
     }
 
     private String formatKeyUsage(boolean[] keyUsage) {
@@ -272,9 +269,7 @@ public class CertificateDetailsDialog extends JDialog {
 
     private void copyPemToClipboard() {
         try {
-            String pem = "-----BEGIN CERTIFICATE-----\n" +
-                    formatBase64(Base64.encode(certificate.getEncoded())) +
-                    "\n-----END CERTIFICATE-----";
+            String pem = StringFormatUtils.toPemFormat(certificate);
             StringSelection selection = new StringSelection(pem);
             Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
             clipboard.setContents(selection, null);
@@ -288,10 +283,5 @@ public class CertificateDetailsDialog extends JDialog {
                     "Error",
                     JOptionPane.ERROR_MESSAGE);
         }
-    }
-
-    private String formatBase64(byte[] data) {
-        String base64 = new String(data).replaceAll("(.{64})", "$1\\n");
-        return base64.trim();
     }
 }

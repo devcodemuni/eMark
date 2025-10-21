@@ -76,20 +76,7 @@ public class WindowsKeyStoreProvider extends X509CertificateValidatorImpl implem
 
     private String findAliasByCertSerial(String serialHex) throws CertificateNotFoundException, KeyStoreInitializationException {
         try {
-            Enumeration<String> aliases = keyStore.aliases();
-            while (aliases.hasMoreElements()) {
-                String alias = aliases.nextElement();
-                Certificate cert = keyStore.getCertificate(alias);
-                if (cert instanceof X509Certificate) {
-                    String serial = ((X509Certificate) cert).getSerialNumber().toString(16);
-                    String providedSerialHex = serialHex.startsWith("0") ? serialHex.substring(1) : serialHex;
-
-                    if (serial.equalsIgnoreCase(providedSerialHex)) {
-                        return alias; // Found matching alias, return immediately
-                    }
-                }
-            }
-            throw new CertificateNotFoundException(String.format("Certificate with serial %s not found", serialHex));
+            return com.codemuni.utils.KeyStoreAliasHelper.findAliasBySerialHex(keyStore, serialHex);
         } catch (KeyStoreException e) {
             throw new KeyStoreInitializationException("Error searching for alias", e);
         }

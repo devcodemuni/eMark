@@ -193,20 +193,6 @@ public class DialogUtils {
         if (dontShowAgain.isSelected()) {
             prefs.putBoolean(preferenceKey, true);
         }
-
-    }
-
-    /**
-     * Utility to reset all "Don't show again" dialog prefs.
-     */
-    public static void resetDialogPreferences() {
-        Preferences prefs = Preferences.userNodeForPackage(DialogUtils.class);
-        try {
-            for (String key : prefs.keys()) {
-                prefs.remove(key);
-            }
-        } catch (Exception ignored) {
-        }
     }
 
     /**

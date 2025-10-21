@@ -7,10 +7,8 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
-import javax.net.ssl.TrustManagerFactory;
 import java.io.File;
 import java.security.InvalidAlgorithmParameterException;
-import java.security.KeyStore;
 import java.security.Security;
 import java.security.cert.*;
 import java.text.SimpleDateFormat;
@@ -30,44 +28,17 @@ public class SignatureVerificationService {
 
     private static final Log log = LogFactory.getLog(SignatureVerificationService.class);
     private static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("MMM dd, yyyy HH:mm:ss");
-    private final TrustStoreManager trustStoreManager;
-    private VerificationProgressListener progressListener;
-
-    // Revocation status cache for current verification session
-    // Prevents redundant OCSP/CRL checks for same certificate across multiple signatures
-    private Map<String, RevocationCacheEntry> revocationCache;
-
-    /**
-     * Cache entry for revocation status.
-     * Used to avoid redundant OCSP/CRL checks for same certificate.
-     */
-    private static class RevocationCacheEntry {
-        final String status;
-        final boolean isRevoked;
-        final Date revocationTime;
-        final String source;
-        final long timestamp;
-
-        RevocationCacheEntry(String status, boolean isRevoked, Date revocationTime, String source) {
-            this.status = status;
-            this.isRevoked = isRevoked;
-            this.revocationTime = revocationTime;
-            this.source = source;
-            this.timestamp = System.currentTimeMillis();
-        }
-    }
-
-    /**
-     * Interface for receiving verification progress updates.
-     */
-    public interface VerificationProgressListener {
-        void onProgress(String message);
-    }
 
     static {
         // Register BouncyCastle provider for cryptographic operations
         Security.addProvider(new BouncyCastleProvider());
     }
+
+    private final TrustStoreManager trustStoreManager;
+    private VerificationProgressListener progressListener;
+    // Revocation status cache for current verification session
+    // Prevents redundant OCSP/CRL checks for same certificate across multiple signatures
+    private Map<String, RevocationCacheEntry> revocationCache;
 
     public SignatureVerificationService() {
         this.trustStoreManager = TrustStoreManager.getInstance();
@@ -92,459 +63,18 @@ public class SignatureVerificationService {
     }
 
     /**
-     * Verification result for a single signature.
+     * Resets the verification service state.
+     * Should be called when loading a new PDF to ensure clean state.
+     * Clears revocation cache and removes progress listener.
      */
-    public static class SignatureVerificationResult {
-        private final String fieldName;
-        private final String signerName;
-        private final Date signDate;
-        private final String reason;
-        private final String location;
-        private final String contactInfo;
-
-        // Verification status flags
-        private boolean documentIntact = false;
-        private boolean signatureValid = false;
-        private boolean certificateValid = false;
-        private boolean certificateTrusted = false;
-        private boolean timestampValid = false;
-        private boolean hasLTV = false;
-        private boolean certificateRevoked = false;
-        private String revocationStatus = "Not Checked"; // Not Checked, Valid, Revoked, Unknown
-
-        // Detailed information
-        private String certificateSubject;
-        private String certificateIssuer;
-        private Date certificateValidFrom;
-        private Date certificateValidTo;
-        private String signatureAlgorithm;
-        private List<String> verificationErrors = new ArrayList<>();
-        private List<String> verificationWarnings = new ArrayList<>();
-        private List<String> verificationInfo = new ArrayList<>();
-        private X509Certificate signerCertificate;
-        private List<X509Certificate> certificateChain;
-
-        // Timestamp information
-        private Date timestampDate;
-        private String timestampAuthority;
-
-        // Revision information
-        private int revision;
-        private int totalRevisions;
-        private boolean coversWholeDocument = false;
-
-        // Position information (for rectangle overlay)
-        private int pageNumber = -1;
-        private float[] position; // [llx, lly, urx, ury] in PDF coordinates
-
-        // Certification information (PDF viewer style)
-        private com.codemuni.model.CertificationLevel certificationLevel = com.codemuni.model.CertificationLevel.NOT_CERTIFIED;
-        private boolean isCertificationSignature = false;
-
-        // Visibility information
-        private boolean isInvisible = false;
-
-        public SignatureVerificationResult(String fieldName, String signerName, Date signDate,
-                                                  String reason, String location, String contactInfo) {
-            this.fieldName = fieldName;
-            this.signerName = signerName != null ? signerName : "";
-            this.signDate = signDate;
-            this.reason = reason != null ? reason : "";
-            this.location = location != null ? location : "";
-            this.contactInfo = contactInfo != null ? contactInfo : "";
-        }
-
-        // Getters and setters
-        public String getFieldName() {
-            return fieldName;
-        }
-
-        public String getSignerName() {
-            return signerName;
-        }
-
-        public Date getSignDate() {
-            return signDate;
-        }
-
-        public String getReason() {
-            return reason;
-        }
-
-        public String getLocation() {
-            return location;
-        }
-
-        public String getContactInfo() {
-            return contactInfo;
-        }
-
-        public boolean isDocumentIntact() {
-            return documentIntact;
-        }
-
-        public void setDocumentIntact(boolean documentIntact) {
-            this.documentIntact = documentIntact;
-        }
-
-        public boolean isSignatureValid() {
-            return signatureValid;
-        }
-
-        public void setSignatureValid(boolean signatureValid) {
-            this.signatureValid = signatureValid;
-        }
-
-        public boolean isCertificateValid() {
-            return certificateValid;
-        }
-
-        public void setCertificateValid(boolean certificateValid) {
-            this.certificateValid = certificateValid;
-        }
-
-        public boolean isCertificateTrusted() {
-            return certificateTrusted;
-        }
-
-        public void setCertificateTrusted(boolean certificateTrusted) {
-            this.certificateTrusted = certificateTrusted;
-        }
-
-        public boolean isTimestampValid() {
-            return timestampValid;
-        }
-
-        public void setTimestampValid(boolean timestampValid) {
-            this.timestampValid = timestampValid;
-        }
-
-        public boolean hasLTV() {
-            return hasLTV;
-        }
-
-        public void setHasLTV(boolean hasLTV) {
-            this.hasLTV = hasLTV;
-        }
-
-        public boolean isCertificateRevoked() {
-            return certificateRevoked;
-        }
-
-        public void setCertificateRevoked(boolean certificateRevoked) {
-            this.certificateRevoked = certificateRevoked;
-        }
-
-        public String getRevocationStatus() {
-            return revocationStatus;
-        }
-
-        public void setRevocationStatus(String revocationStatus) {
-            this.revocationStatus = revocationStatus;
-        }
-
-        public String getCertificateSubject() {
-            return certificateSubject;
-        }
-
-        public void setCertificateSubject(String certificateSubject) {
-            this.certificateSubject = certificateSubject;
-        }
-
-        public String getCertificateIssuer() {
-            return certificateIssuer;
-        }
-
-        public void setCertificateIssuer(String certificateIssuer) {
-            this.certificateIssuer = certificateIssuer;
-        }
-
-        public Date getCertificateValidFrom() {
-            return certificateValidFrom;
-        }
-
-        public void setCertificateValidFrom(Date certificateValidFrom) {
-            this.certificateValidFrom = certificateValidFrom;
-        }
-
-        public Date getCertificateValidTo() {
-            return certificateValidTo;
-        }
-
-        public void setCertificateValidTo(Date certificateValidTo) {
-            this.certificateValidTo = certificateValidTo;
-        }
-
-        public String getSignatureAlgorithm() {
-            return signatureAlgorithm;
-        }
-
-        public void setSignatureAlgorithm(String signatureAlgorithm) {
-            this.signatureAlgorithm = signatureAlgorithm;
-        }
-
-        public List<String> getVerificationErrors() {
-            return verificationErrors;
-        }
-
-        public void addVerificationError(String error) {
-            this.verificationErrors.add(error);
-        }
-
-        public List<String> getVerificationWarnings() {
-            return verificationWarnings;
-        }
-
-        public void addVerificationWarning(String warning) {
-            this.verificationWarnings.add(warning);
-        }
-
-        public List<String> getVerificationInfo() {
-            return verificationInfo;
-        }
-
-        public void addVerificationInfo(String info) {
-            this.verificationInfo.add(info);
-        }
-
-        public X509Certificate getSignerCertificate() {
-            return signerCertificate;
-        }
-
-        public void setSignerCertificate(X509Certificate signerCertificate) {
-            this.signerCertificate = signerCertificate;
-        }
-
-        public List<X509Certificate> getCertificateChain() {
-            return certificateChain;
-        }
-
-        public void setCertificateChain(List<X509Certificate> certificateChain) {
-            this.certificateChain = certificateChain;
-        }
-
-        public Date getTimestampDate() {
-            return timestampDate;
-        }
-
-        public void setTimestampDate(Date timestampDate) {
-            this.timestampDate = timestampDate;
-        }
-
-        public String getTimestampAuthority() {
-            return timestampAuthority;
-        }
-
-        public void setTimestampAuthority(String timestampAuthority) {
-            this.timestampAuthority = timestampAuthority;
-        }
-
-        public int getRevision() {
-            return revision;
-        }
-
-        public void setRevision(int revision) {
-            this.revision = revision;
-        }
-
-        public int getTotalRevisions() {
-            return totalRevisions;
-        }
-
-        public void setTotalRevisions(int totalRevisions) {
-            this.totalRevisions = totalRevisions;
-        }
-
-        public boolean isCoversWholeDocument() {
-            return coversWholeDocument;
-        }
-
-        public void setCoversWholeDocument(boolean coversWholeDocument) {
-            this.coversWholeDocument = coversWholeDocument;
-        }
-
-        public int getPageNumber() {
-            return pageNumber;
-        }
-
-        public void setPageNumber(int pageNumber) {
-            this.pageNumber = pageNumber;
-        }
-
-        public float[] getPosition() {
-            return position;
-        }
-        public void setPosition(float[] position) {
-            this.position = position;
-        }
-
-        public com.codemuni.model.CertificationLevel getCertificationLevel() {
-            return certificationLevel;
-        }
-
-        public void setCertificationLevel(com.codemuni.model.CertificationLevel certificationLevel) {
-            this.certificationLevel = certificationLevel;
-        }
-
-        public boolean isCertificationSignature() {
-            return isCertificationSignature;
-        }
-
-        public void setCertificationSignature(boolean certificationSignature) {
-            this.isCertificationSignature = certificationSignature;
-        }
-
-        public boolean isInvisible() {
-            return isInvisible;
-        }
-
-        public void setInvisible(boolean invisible) {
-            this.isInvisible = invisible;
-        }
-
-        /**
-         * Returns overall verification status based on all checks.
-         * PDF viewer style: If revocation cannot be verified, signature is UNKNOWN.
-         */
-        public VerificationStatus getOverallStatus() {
-            // Critical failures - INVALID
-            if (!documentIntact) {
-                return VerificationStatus.INVALID;
-            }
-            if (!signatureValid) {
-                return VerificationStatus.INVALID;
-            }
-            if (certificateRevoked) {
-                return VerificationStatus.INVALID;
-            }
-
-            // Revocation issues - UNKNOWN (PDF viewer style)
-            if (revocationStatus.startsWith("Unknown") || revocationStatus.equals("Not Checked")) {
-                return VerificationStatus.UNKNOWN;
-            }
-
-            // Trust issues - UNKNOWN
-            if (!certificateValid) {
-                return VerificationStatus.UNKNOWN;
-            }
-            if (!certificateTrusted) {
-                return VerificationStatus.UNKNOWN;
-            }
-
-            return VerificationStatus.VALID;
-        }
-        public String getStatusMessage() {
-            VerificationStatus status = getOverallStatus();
-            switch (status) {
-                case VALID:
-                    return "Signed and all signatures are valid";
-                case UNKNOWN:
-                    return "Signed but identity could not be verified";
-                case INVALID:
-                    // Provide specific reason for invalidity in priority order
-                    if (!documentIntact) {
-                        return "Document has been modified after signing";
-                    } else if (!signatureValid) {
-                        return "Signature is invalid or corrupted";
-                    } else if (certificateRevoked) {
-                        return "Certificate has been revoked";
-                    } else if (!certificateValid) {
-                        return "Certificate has expired or is not yet valid";
-                    } else {
-                        return "Signature verification failed";
-                    }
-                default:
-                    return "Unknown verification status";
-            }
-        }
+    public void reset() {
+        if (revocationCache != null) {
+            revocationCache.clear();
+            log.debug("Cleared revocation cache");
+        }
+        progressListener = null;
+        log.debug("Reset verification service state");
     }
-
-    /**
-     * Overall verification status enum (PDF viewer style).
-     */
-    public enum VerificationStatus {
-        VALID,      // Green checkmark - All checks passed
-        UNKNOWN,    // Yellow question mark - Cannot verify trust
-        INVALID     // Red X - Signature invalid or document modified
-    }
-
-    /**
-     * Algorithm strength levels (CCA/NIST compliance).
-     */
-    private enum AlgorithmStrength {
-        FORBIDDEN,   // MD5 - Must reject
-        DEPRECATED,  // SHA-1 - Deprecated since 2017
-        WEAK,        // SHA-224 - Weak but sometimes acceptable
-        ACCEPTABLE,  // SHA-256 - Minimum acceptable
-        STRONG       // SHA-384, SHA-512 - Recommended
-    }
-
-    /**
-     * Checks if PDF is certified (has a certification signature).
-     * Certified PDFs may restrict additional signatures.
-     *
-     * @param pdfFile     PDF file to check
-     * @param pdfPassword Password for encrypted PDFs (can be null)
-     * @return true if PDF is certified, false otherwise
-     */
-    public boolean isPdfCertified(File pdfFile, String pdfPassword) {
-        if (pdfFile == null || !pdfFile.exists()) {
-            return false;
-        }
-
-        PdfReader reader = null;
-        try {
-            if (pdfPassword != null && !pdfPassword.isEmpty()) {
-                reader = new PdfReader(pdfFile.getAbsolutePath(), pdfPassword.getBytes());
-            } else {
-                reader = new PdfReader(pdfFile.getAbsolutePath());
-            }
-
-            AcroFields acroFields = reader.getAcroFields();
-            if (acroFields == null) {
-                return false;
-            }
-
-            // Check if PDF has certification signature (DocMDP)
-            // In iText 5, we check the signature dictionary for certification
-            List<String> signatureNames = acroFields.getSignatureNames();
-            if (!signatureNames.isEmpty()) {
-                // Certification signature is typically the first signature
-                String firstSig = signatureNames.get(0);
-                try {
-                    // Check if this signature certifies the document
-                    com.itextpdf.text.pdf.PdfDictionary sigDict = acroFields.getSignatureDictionary(firstSig);
-                    if (sigDict != null) {
-                        com.itextpdf.text.pdf.PdfArray reference = sigDict.getAsArray(com.itextpdf.text.pdf.PdfName.REFERENCE);
-                        if (reference != null && reference.size() > 0) {
-                            // Has reference array - indicates certification
-                            com.itextpdf.text.pdf.PdfDictionary refDict = reference.getAsDict(0);
-                            if (refDict != null) {
-                                com.itextpdf.text.pdf.PdfName transformMethod = refDict.getAsName(com.itextpdf.text.pdf.PdfName.TRANSFORMMETHOD);
-                                if (com.itextpdf.text.pdf.PdfName.DOCMDP.equals(transformMethod)) {
-                                    log.info("PDF is certified (DocMDP signature found)");
-                                    return true;
-                                }
-                            }
-                        }
-                    }
-                } catch (Exception e) {
-                    log.debug("Error checking certification for signature: " + firstSig, e);
-                }
-            }
-        } catch (Exception e) {
-            log.error("Error checking PDF certification status", e);
-        } finally {
-            if (reader != null) {
-                try {
-                    reader.close();
-                } catch (Exception ignored) {
-                }
-            }
-        }
-        return false;
-    }
-
     /**
      * Verifies all signatures in a PDF file.
      *
@@ -629,7 +159,7 @@ public class SignatureVerificationService {
             } catch (Exception e) {
                 log.error("Error verifying signature: " + signatureName, e);
                 SignatureVerificationResult errorResult = new SignatureVerificationResult(
-                    signatureName, "", null, "", "", "");
+                        signatureName, "", null, "", "", "");
                 errorResult.addVerificationError("Failed to verify signature: " + e.getMessage());
                 results.add(errorResult);
             }
@@ -642,7 +172,7 @@ public class SignatureVerificationService {
      * Applies PDF viewer verification rules for certification levels.
      * This method modifies verification results based on the certification status
      * of the LAST signature in the document.
-     *
+     * <p>
      * PDF Viewer Rules:
      * - Case 1: Last sig is NO_CHANGES_ALLOWED → only last valid, all previous invalid
      * - Case 2: Last sig is FORM_FILLING_* → all valid if all previous were NOT_CERTIFIED
@@ -674,7 +204,7 @@ public class SignatureVerificationService {
                 // Mark as invalid with specific error
                 prevSig.setDocumentIntact(false);
                 prevSig.addVerificationError(
-                    "Document was changed after signing. This signature is no longer valid."
+                        "Document was changed after signing. This signature is no longer valid."
                 );
 
                 log.info("  [" + i + "] " + prevSig.getFieldName() + " → INVALIDATED");
@@ -682,15 +212,15 @@ public class SignatureVerificationService {
 
             // Last signature status depends on its own verification
             log.info("  [" + (results.size() - 1) + "] " + lastSig.getFieldName() +
-                     " → " + (lastSig.getOverallStatus() == VerificationStatus.VALID ? "VALID" : "CHECK VERIFICATION"));
+                    " → " + (lastSig.getOverallStatus() == VerificationStatus.VALID ? "VALID" : "CHECK VERIFICATION"));
         }
 
         // CASE 2: Last signature is FORM_FILLING_* (P=2 or P=3)
         else if (lastCertLevel == com.codemuni.model.CertificationLevel.FORM_FILLING_CERTIFIED ||
-                 lastCertLevel == com.codemuni.model.CertificationLevel.FORM_FILLING_AND_ANNOTATION_CERTIFIED) {
+                lastCertLevel == com.codemuni.model.CertificationLevel.FORM_FILLING_AND_ANNOTATION_CERTIFIED) {
 
             log.info("Case 2: Last signature is " + lastCertLevel.getLabel() +
-                     " - verifying all previous are NOT_CERTIFIED");
+                    " - verifying all previous are NOT_CERTIFIED");
 
             // Check if all earlier signatures are NOT_CERTIFIED
             boolean allPreviousAreApprovalSignatures = true;
@@ -699,7 +229,7 @@ public class SignatureVerificationService {
                 if (prevSig.getCertificationLevel() != com.codemuni.model.CertificationLevel.NOT_CERTIFIED) {
                     allPreviousAreApprovalSignatures = false;
                     log.warn("  [" + i + "] " + prevSig.getFieldName() +
-                             " is " + prevSig.getCertificationLevel().getLabel() + " (NOT allowed before FORM_FILLING_*)");
+                            " is " + prevSig.getCertificationLevel().getLabel() + " (NOT allowed before FORM_FILLING_*)");
                     break;
                 }
             }
@@ -723,7 +253,7 @@ public class SignatureVerificationService {
                 if (sig.getCertificationLevel() != com.codemuni.model.CertificationLevel.NOT_CERTIFIED) {
                     allAreApprovalSignatures = false;
                     log.warn("  Found certified signature: " + sig.getFieldName() +
-                             " (" + sig.getCertificationLevel().getLabel() + ")");
+                            " (" + sig.getCertificationLevel().getLabel() + ")");
                     break;
                 }
             }
@@ -780,7 +310,7 @@ public class SignatureVerificationService {
         }
 
         SignatureVerificationResult result = new SignatureVerificationResult(
-            signatureName, signerName, signDate, reason, location, contactInfo);
+                signatureName, signerName, signDate, reason, location, contactInfo);
 
         try {
             // Get signature dictionary
@@ -874,10 +404,10 @@ public class SignatureVerificationService {
                         }
                     } else {
                         // No signing time available - check current time as fallback
-                        log.warn("No signing time or timestamp available - checking certificate validity at current time");
+                        log.info("No signing time or timestamp available - checking certificate validity at current time");
                         signerCert.checkValidity();
                         result.setCertificateValid(true);
-                        result.addVerificationWarning("Certificate validity checked at current time (no timestamp available)");
+                        result.addVerificationInfo("Certificate validity checked at current time");
                     }
                 } catch (CertificateExpiredException e) {
                     result.setCertificateValid(false);
@@ -1044,8 +574,8 @@ public class SignatureVerificationService {
                 }
 
                 // Check certificate revocation status (OCSP) - PDF viewer style
-            notifyProgress("Checking revocation status (OCSP)...");
-            checkRevocationStatus(signerCert, pkcs7, result, signDate);
+                notifyProgress("Checking revocation status (OCSP)...");
+                checkRevocationStatus(signerCert, pkcs7, result, signDate);
             } else {
                 result.addVerificationError("No certificate found in signature");
             }
@@ -1118,9 +648,8 @@ public class SignatureVerificationService {
                 }
             }
 
-            // 7. TIMESTAMP VERIFICATION (RFC 3161 + CCA Requirement)
-            // CRITICAL: For legal validity in India, timestamp verification is MANDATORY
-            // Timestamp provides trusted proof of signing time
+            // 7. TIMESTAMP VERIFICATION (RFC 3161)
+            // Timestamp provides trusted proof of signing time (optional feature)
             if (pkcs7.getTimeStampDate() != null) {
                 notifyProgress("Verifying timestamp token...");
                 log.info("Timestamp found - performing RFC 3161 verification");
@@ -1136,7 +665,7 @@ public class SignatureVerificationService {
                         log.info("Timestamp verification: PASSED");
                         result.addVerificationInfo("Timestamp verified successfully - TSA: " + tsResult.tsaName);
 
-                        // CCA Compliance: Timestamp proves exact signing time
+                        // Timestamp proves exact signing time
                         result.addVerificationInfo("Signing time verified by trusted timestamp: " +
                                 DATE_FORMAT.format(pkcs7.getTimeStampDate().getTime()));
                     } else {
@@ -1155,11 +684,8 @@ public class SignatureVerificationService {
 
                 log.info("Timestamp: Enabled and verified");
             } else {
-                // Timestamp not enabled - CRITICAL WARNING for CCA compliance
-                // Without timestamp, signing time cannot be proven
-                result.addVerificationWarning("Timestamp not enabled - signing time cannot be cryptographically proven");
-                result.addVerificationWarning("For legal validity in India, timestamp is recommended by CCA");
-                log.warn("Timestamp: Not enabled - signing time is signer's claimed time (not trusted)");
+                // Timestamp not present - this is normal and optional
+                log.info("Timestamp: Not present (signing time is self-declared)");
             }
 
             // 8. LTV INFORMATION (PDF viewer-style check)
@@ -1215,19 +741,19 @@ public class SignatureVerificationService {
             if (isCert) {
                 int pValue = getCertificationLevel(acroFields, signatureName);
                 com.codemuni.model.CertificationLevel certLevel =
-                    com.codemuni.model.CertificationLevel.fromPValue(pValue);
+                        com.codemuni.model.CertificationLevel.fromPValue(pValue);
                 result.setCertificationLevel(certLevel);
                 log.info("✓ Certification signature detected: " + certLevel.getLabel() +
-                         " (P=" + pValue + ")");
+                        " (P=" + pValue + ")");
             } else {
                 result.setCertificationLevel(com.codemuni.model.CertificationLevel.NOT_CERTIFIED);
                 log.info("✓ Approval signature (NOT_CERTIFIED)");
             }
 
             log.info("Signature verification completed for: " + signatureName +
-                     " - Status: " + result.getOverallStatus() +
-                     " - Certification: " + result.getCertificationLevel().getLabel() +
-                     " - Page: " + result.getPageNumber());
+                    " - Status: " + result.getOverallStatus() +
+                    " - Certification: " + result.getCertificationLevel().getLabel() +
+                    " - Page: " + result.getPageNumber());
 
         } catch (Exception e) {
             log.error("Error during signature verification", e);
@@ -1240,15 +766,15 @@ public class SignatureVerificationService {
     /**
      * Builds a properly ordered certificate chain starting from the signer certificate.
      * This is critical because pkcs7.getCertificates() returns certificates in arbitrary order.
-     *
+     * <p>
      * The correct order is: [end-entity (signer), intermediate CA(s), root CA]
      *
-     * @param signerCert The signing certificate (end entity)
+     * @param signerCert     The signing certificate (end entity)
      * @param availableCerts All certificates from the PDF signature
      * @return Ordered certificate chain from signer to root
      */
     private List<X509Certificate> buildOrderedCertificateChain(X509Certificate signerCert,
-                                                                List<X509Certificate> availableCerts) {
+                                                               List<X509Certificate> availableCerts) {
         List<X509Certificate> orderedChain = new ArrayList<>();
 
         if (signerCert == null) {
@@ -1320,7 +846,7 @@ public class SignatureVerificationService {
      * Finds the issuer certificate for a given certificate in a list of certificates.
      * Uses proper DN comparison and signature verification.
      *
-     * @param cert Certificate to find issuer for
+     * @param cert           Certificate to find issuer for
      * @param availableCerts List of available certificates
      * @return Issuer certificate if found, null otherwise
      */
@@ -1446,8 +972,8 @@ public class SignatureVerificationService {
                 String errorMsg;
                 if (reason.contains("NO_TRUST_ANCHOR") || reason.contains("UNDETERMINED_REVOCATION_STATUS")) {
                     errorMsg = "Root certificate not found in trust store. Add '" +
-                                      extractCN(failedCert.getIssuerDN().toString()) +
-                                      "' to Trust Manager.";
+                            extractCN(failedCert.getIssuerDN().toString()) +
+                            "' to Trust Manager.";
                 } else {
                     errorMsg = "Certificate '" + certName + "' verification failed: " + reason;
                 }
@@ -1681,9 +1207,9 @@ public class SignatureVerificationService {
      * Performs live OCSP check by extracting URL from certificate.
      * CRITICAL FIX: Now checks revocation time vs signing time to properly validate signatures.
      *
-     * @param cert The certificate to check
-     * @param pkcs7 The signature PKCS7 data
-     * @param result The verification result to update
+     * @param cert     The certificate to check
+     * @param pkcs7    The signature PKCS7 data
+     * @param result   The verification result to update
      * @param signDate The date when the document was signed (used for revocation time comparison)
      */
     private void checkRevocationStatus(X509Certificate cert, PdfPKCS7 pkcs7, SignatureVerificationResult result, Date signDate) {
@@ -2050,11 +1576,11 @@ public class SignatureVerificationService {
 
                         String status;
                         if (lastException.isNetworkError()) {
-                            status = "Unknown (Network Error after " + maxRetries + " attempts)";
-                            result.addVerificationWarning("Could not check if certificate was revoked (network error after " + maxRetries + " retry attempts)");
+                            status = "Validity Unknown (Network Error)";
+                            result.addVerificationInfo("Revocation status could not be verified due to network error");
                         } else {
-                            status = "Unknown (Check Failed)";
-                            result.addVerificationWarning("Could not check if certificate was revoked");
+                            status = "Validity Unknown (Check Failed)";
+                            result.addVerificationInfo("Revocation status could not be verified");
                         }
                         result.setRevocationStatus(status);
 
@@ -2067,17 +1593,20 @@ public class SignatureVerificationService {
                 }
             }
 
-            result.setRevocationStatus("Not Checked");
-            result.addVerificationWarning("Could not check if certificate was revoked");
+            // No OCSP URL found - this is normal for some certificates
+            // Adobe Reader also accepts this as valid (just can't verify revocation)
+            result.setRevocationStatus("Validity Unknown");
+            result.addVerificationInfo("Revocation status could not be determined (no OCSP information available)");
+            log.info("No OCSP URL found in certificate - revocation check not possible");
 
             // Cache the "Not Checked" status to avoid redundant failed attempts
             revocationCache.put(cacheKey, new RevocationCacheEntry(
-                    "Not Checked", false, null, "No OCSP URL"));
+                    "Validity Unknown", false, null, "No OCSP URL"));
 
         } catch (Exception e) {
             log.warn("OCSP error: " + e.getMessage());
-            result.setRevocationStatus("Unknown");
-            result.addVerificationWarning("Could not check if certificate was revoked");
+            result.setRevocationStatus("Validity Unknown");
+            result.addVerificationInfo("Revocation status could not be determined");
         }
     }
 
@@ -2087,7 +1616,7 @@ public class SignatureVerificationService {
             if (aiaExt == null) return null;
 
             org.bouncycastle.asn1.ASN1InputStream ais = new org.bouncycastle.asn1.ASN1InputStream(
-                new java.io.ByteArrayInputStream(aiaExt));
+                    new java.io.ByteArrayInputStream(aiaExt));
             org.bouncycastle.asn1.DEROctetString oct = (org.bouncycastle.asn1.DEROctetString) ais.readObject();
             ais.close();
 
@@ -2124,27 +1653,14 @@ public class SignatureVerificationService {
         return null;
     }
 
-    /**
-     * Result of OCSP check including revocation status and time.
-     */
-    private static class OCSPCheckResult {
-        final boolean isRevoked;
-        final Date revocationTime; // null if not revoked
-
-        OCSPCheckResult(boolean isRevoked, Date revocationTime) {
-            this.isRevoked = isRevoked;
-            this.revocationTime = revocationTime;
-        }
-    }
-
     private OCSPCheckResult performLiveOCSPCheck(X509Certificate cert, X509Certificate issuerCert, String ocspUrl)
             throws SignatureVerificationException {
         try {
             // Use BouncyCastle 1.48 OCSP API (org.bouncycastle.ocsp)
             org.bouncycastle.ocsp.CertificateID certId = new org.bouncycastle.ocsp.CertificateID(
-                org.bouncycastle.ocsp.CertificateID.HASH_SHA1,
-                issuerCert,
-                cert.getSerialNumber()
+                    org.bouncycastle.ocsp.CertificateID.HASH_SHA1,
+                    issuerCert,
+                    cert.getSerialNumber()
             );
 
             org.bouncycastle.ocsp.OCSPReqGenerator reqGen = new org.bouncycastle.ocsp.OCSPReqGenerator();
@@ -2169,8 +1685,8 @@ public class SignatureVerificationService {
             if (responseCode != 200) {
                 log.warn("OCSP responder returned code: " + responseCode);
                 throw new SignatureVerificationException(
-                    SignatureVerificationException.ErrorType.OCSP_FAILED,
-                    "OCSP responder returned HTTP " + responseCode);
+                        SignatureVerificationException.ErrorType.OCSP_FAILED,
+                        "OCSP responder returned HTTP " + responseCode);
             }
 
             java.io.InputStream in = conn.getInputStream();
@@ -2211,57 +1727,42 @@ public class SignatureVerificationService {
         } catch (java.net.SocketTimeoutException e) {
             log.warn("OCSP: Timeout - " + e.getMessage());
             throw new SignatureVerificationException(
-                SignatureVerificationException.ErrorType.OCSP_TIMEOUT,
-                "OCSP responder at " + ocspUrl + " did not respond within 5 seconds",
-                e);
+                    SignatureVerificationException.ErrorType.OCSP_TIMEOUT,
+                    "OCSP responder at " + ocspUrl + " did not respond within 5 seconds",
+                    e);
         } catch (java.io.IOException e) {
             log.warn("OCSP: Network error - " + e.getMessage());
             throw new SignatureVerificationException(
-                SignatureVerificationException.ErrorType.OCSP_NETWORK_ERROR,
-                e.getMessage(),
-                e);
+                    SignatureVerificationException.ErrorType.OCSP_NETWORK_ERROR,
+                    e.getMessage(),
+                    e);
         } catch (SignatureVerificationException e) {
             // Re-throw our custom exception
             throw e;
         } catch (Exception e) {
             log.warn("OCSP: Error - " + e.getMessage());
             throw new SignatureVerificationException(
-                SignatureVerificationException.ErrorType.OCSP_FAILED,
-                e.getMessage(),
-                e);
+                    SignatureVerificationException.ErrorType.OCSP_FAILED,
+                    e.getMessage(),
+                    e);
         }
 
         return new OCSPCheckResult(false, null);
     }
 
     /**
-     * Result of timestamp verification.
-     */
-    private static class TimestampVerificationResult {
-        final boolean isValid;
-        final String tsaName;
-        final String errorMessage;
-
-        TimestampVerificationResult(boolean isValid, String tsaName, String errorMessage) {
-            this.isValid = isValid;
-            this.tsaName = tsaName;
-            this.errorMessage = errorMessage;
-        }
-    }
-
-    /**
      * Verifies timestamp according to RFC 3161 and CCA requirements.
      * This is CRITICAL for legal validity in India.
-     *
+     * <p>
      * NOTE: iText 5 has limited timestamp API access. This performs basic verification.
      * For full RFC 3161 compliance, consider upgrading to iText 7 or using BouncyCastle directly.
-     *
+     * <p>
      * Verification steps:
      * 1. Check timestamp presence and extract date
      * 2. Verify timestamp date is reasonable (not in future, not too old)
      * 3. Basic signature integrity (iText's built-in verification)
      *
-     * @param pkcs7 Signature PKCS7 data containing timestamp
+     * @param pkcs7           Signature PKCS7 data containing timestamp
      * @param signatureResult Signature verification result (for context)
      * @return Timestamp verification result
      */
@@ -2355,7 +1856,7 @@ public class SignatureVerificationService {
 
     /**
      * Validates hash algorithm strength according to CCA and NIST SP 800-131A.
-     *
+     * <p>
      * CCA Requirements (India):
      * - SHA-256 or stronger is required for new signatures
      * - SHA-1 is deprecated (allowed only for legacy verification)
@@ -2393,31 +1894,13 @@ public class SignatureVerificationService {
 
         // STRONG: SHA-384, SHA-512 (recommended by CCA/NIST)
         if (algoUpper.contains("SHA-384") || algoUpper.contains("SHA384") ||
-            algoUpper.contains("SHA-512") || algoUpper.contains("SHA512") ||
-            algoUpper.contains("SHA-3")) {
+                algoUpper.contains("SHA-512") || algoUpper.contains("SHA512") ||
+                algoUpper.contains("SHA-3")) {
             return AlgorithmStrength.STRONG;
         }
 
         // Unknown algorithm - treat as weak
         return AlgorithmStrength.WEAK;
-    }
-
-    /**
-     * Converts OID to digest algorithm name.
-     */
-    private String getDigestAlgorithmName(String oid) {
-        switch (oid) {
-            case "1.3.14.3.2.26":
-                return "SHA-1";
-            case "2.16.840.1.101.3.4.2.1":
-                return "SHA-256";
-            case "2.16.840.1.101.3.4.2.2":
-                return "SHA-384";
-            case "2.16.840.1.101.3.4.2.3":
-                return "SHA-512";
-            default:
-                return "SHA-256"; // default
-        }
     }
 
     /**
@@ -2497,15 +1980,15 @@ public class SignatureVerificationService {
      * - Approval signatures: Valid even if not the last revision (multiple signatures expected)
      * - Certification signatures: Check if subsequent changes are allowed by certification level
      *
-     * @param acroFields      AcroFields from PDF
-     * @param signatureName   Name of the signature field
-     * @param revision        Signature's revision number
-     * @param totalRevisions  Total number of revisions in PDF
+     * @param acroFields     AcroFields from PDF
+     * @param signatureName  Name of the signature field
+     * @param revision       Signature's revision number
+     * @param totalRevisions Total number of revisions in PDF
      * @param pkcs7          Signature PKCS7 data
      * @return true if document integrity is intact, false if altered
      */
     private boolean verifyDocumentIntegrity(AcroFields acroFields, String signatureName,
-                                           int revision, int totalRevisions, PdfPKCS7 pkcs7) {
+                                            int revision, int totalRevisions, PdfPKCS7 pkcs7) {
         try {
             // STEP 1: Always verify cryptographic signature first
             // This checks if the signed content matches the signature
@@ -2632,11 +2115,503 @@ public class SignatureVerificationService {
      * This includes ONLY:
      * - Embedded certificates (resources/trusted-certs/) - read-only
      * - Manual certificates (user.home/.emark/trusted-certs/) - user-managed
-     *
+     * <p>
      * NOTE: OS trust stores (Windows, macOS, Linux) are NOT used.
      */
     private Set<TrustAnchor> getTrustStore() throws Exception {
         // Use TrustStoreManager to get all trust anchors (embedded + manual only)
         return trustStoreManager.getAllTrustAnchors();
+    }
+
+    /**
+     * Overall verification status enum (PDF viewer style).
+     */
+    public enum VerificationStatus {
+        VALID,      // Green checkmark - All checks passed
+        UNKNOWN,    // Yellow question mark - Cannot verify trust
+        INVALID     // Red X - Signature invalid or document modified
+    }
+
+    /**
+     * Algorithm strength levels (CCA/NIST compliance).
+     */
+    private enum AlgorithmStrength {
+        FORBIDDEN,   // MD5 - Must reject
+        DEPRECATED,  // SHA-1 - Deprecated since 2017
+        WEAK,        // SHA-224 - Weak but sometimes acceptable
+        ACCEPTABLE,  // SHA-256 - Minimum acceptable
+        STRONG       // SHA-384, SHA-512 - Recommended
+    }
+
+    /**
+     * Interface for receiving verification progress updates.
+     */
+    public interface VerificationProgressListener {
+        void onProgress(String message);
+    }
+
+    /**
+     * Cache entry for revocation status.
+     * Used to avoid redundant OCSP/CRL checks for same certificate.
+     */
+    private static class RevocationCacheEntry {
+        final String status;
+        final boolean isRevoked;
+        final Date revocationTime;
+        final String source;
+        final long timestamp;
+
+        RevocationCacheEntry(String status, boolean isRevoked, Date revocationTime, String source) {
+            this.status = status;
+            this.isRevoked = isRevoked;
+            this.revocationTime = revocationTime;
+            this.source = source;
+            this.timestamp = System.currentTimeMillis();
+        }
+    }
+
+    /**
+     * Verification result for a single signature.
+     */
+    public static class SignatureVerificationResult {
+        private final String fieldName;
+        private final String signerName;
+        private final Date signDate;
+        private final String reason;
+        private final String location;
+        private final String contactInfo;
+
+        // Verification status flags
+        private boolean documentIntact = false;
+        private boolean signatureValid = false;
+        private boolean certificateValid = false;
+        private boolean certificateTrusted = false;
+        private boolean timestampValid = false;
+        private boolean hasLTV = false;
+        private boolean certificateRevoked = false;
+        private String revocationStatus = "Not Checked"; // Not Checked, Valid, Revoked, Unknown
+
+        // Detailed information
+        private String certificateSubject;
+        private String certificateIssuer;
+        private Date certificateValidFrom;
+        private Date certificateValidTo;
+        private String signatureAlgorithm;
+        private final List<String> verificationErrors = new ArrayList<>();
+        private final List<String> verificationWarnings = new ArrayList<>();
+        private final List<String> verificationInfo = new ArrayList<>();
+        private X509Certificate signerCertificate;
+        private List<X509Certificate> certificateChain;
+
+        // Timestamp information
+        private Date timestampDate;
+        private String timestampAuthority;
+
+        // Revision information
+        private int revision;
+        private int totalRevisions;
+        private boolean coversWholeDocument = false;
+
+        // Position information (for rectangle overlay)
+        private int pageNumber = -1;
+        private float[] position; // [llx, lly, urx, ury] in PDF coordinates
+
+        // Certification information (PDF viewer style)
+        private com.codemuni.model.CertificationLevel certificationLevel = com.codemuni.model.CertificationLevel.NOT_CERTIFIED;
+        private boolean isCertificationSignature = false;
+
+        // Visibility information
+        private boolean isInvisible = false;
+
+        public SignatureVerificationResult(String fieldName, String signerName, Date signDate,
+                                           String reason, String location, String contactInfo) {
+            this.fieldName = fieldName;
+            this.signerName = signerName != null ? signerName : "";
+            this.signDate = signDate;
+            this.reason = reason != null ? reason : "";
+            this.location = location != null ? location : "";
+            this.contactInfo = contactInfo != null ? contactInfo : "";
+        }
+
+        // Getters and setters
+        public String getFieldName() {
+            return fieldName;
+        }
+
+        public String getSignerName() {
+            return signerName;
+        }
+
+        public Date getSignDate() {
+            return signDate;
+        }
+
+        public String getReason() {
+            return reason;
+        }
+
+        public String getLocation() {
+            return location;
+        }
+
+        public String getContactInfo() {
+            return contactInfo;
+        }
+
+        public boolean isDocumentIntact() {
+            return documentIntact;
+        }
+
+        public void setDocumentIntact(boolean documentIntact) {
+            this.documentIntact = documentIntact;
+        }
+
+        public boolean isSignatureValid() {
+            return signatureValid;
+        }
+
+        public void setSignatureValid(boolean signatureValid) {
+            this.signatureValid = signatureValid;
+        }
+
+        public boolean isCertificateValid() {
+            return certificateValid;
+        }
+
+        public void setCertificateValid(boolean certificateValid) {
+            this.certificateValid = certificateValid;
+        }
+
+        public boolean isCertificateTrusted() {
+            return certificateTrusted;
+        }
+
+        public void setCertificateTrusted(boolean certificateTrusted) {
+            this.certificateTrusted = certificateTrusted;
+        }
+
+        public boolean isTimestampValid() {
+            return timestampValid;
+        }
+
+        public void setTimestampValid(boolean timestampValid) {
+            this.timestampValid = timestampValid;
+        }
+
+        public boolean hasLTV() {
+            return hasLTV;
+        }
+
+        public void setHasLTV(boolean hasLTV) {
+            this.hasLTV = hasLTV;
+        }
+
+        public boolean isCertificateRevoked() {
+            return certificateRevoked;
+        }
+
+        public void setCertificateRevoked(boolean certificateRevoked) {
+            this.certificateRevoked = certificateRevoked;
+        }
+
+        public String getRevocationStatus() {
+            return revocationStatus;
+        }
+
+        public void setRevocationStatus(String revocationStatus) {
+            this.revocationStatus = revocationStatus;
+        }
+
+        public String getCertificateSubject() {
+            return certificateSubject;
+        }
+
+        public void setCertificateSubject(String certificateSubject) {
+            this.certificateSubject = certificateSubject;
+        }
+
+        public String getCertificateIssuer() {
+            return certificateIssuer;
+        }
+
+        public void setCertificateIssuer(String certificateIssuer) {
+            this.certificateIssuer = certificateIssuer;
+        }
+
+        public Date getCertificateValidFrom() {
+            return certificateValidFrom;
+        }
+
+        public void setCertificateValidFrom(Date certificateValidFrom) {
+            this.certificateValidFrom = certificateValidFrom;
+        }
+
+        public Date getCertificateValidTo() {
+            return certificateValidTo;
+        }
+
+        public void setCertificateValidTo(Date certificateValidTo) {
+            this.certificateValidTo = certificateValidTo;
+        }
+
+        public String getSignatureAlgorithm() {
+            return signatureAlgorithm;
+        }
+
+        public void setSignatureAlgorithm(String signatureAlgorithm) {
+            this.signatureAlgorithm = signatureAlgorithm;
+        }
+
+        public List<String> getVerificationErrors() {
+            return verificationErrors;
+        }
+
+        public void addVerificationError(String error) {
+            this.verificationErrors.add(error);
+        }
+
+        public List<String> getVerificationWarnings() {
+            return verificationWarnings;
+        }
+
+        public void addVerificationWarning(String warning) {
+            this.verificationWarnings.add(warning);
+        }
+
+        public List<String> getVerificationInfo() {
+            return verificationInfo;
+        }
+
+        public void addVerificationInfo(String info) {
+            this.verificationInfo.add(info);
+        }
+
+        public X509Certificate getSignerCertificate() {
+            return signerCertificate;
+        }
+
+        public void setSignerCertificate(X509Certificate signerCertificate) {
+            this.signerCertificate = signerCertificate;
+        }
+
+        public List<X509Certificate> getCertificateChain() {
+            return certificateChain;
+        }
+
+        public void setCertificateChain(List<X509Certificate> certificateChain) {
+            this.certificateChain = certificateChain;
+        }
+
+        public Date getTimestampDate() {
+            return timestampDate;
+        }
+
+        public void setTimestampDate(Date timestampDate) {
+            this.timestampDate = timestampDate;
+        }
+
+        public String getTimestampAuthority() {
+            return timestampAuthority;
+        }
+
+        public void setTimestampAuthority(String timestampAuthority) {
+            this.timestampAuthority = timestampAuthority;
+        }
+
+        public int getRevision() {
+            return revision;
+        }
+
+        public void setRevision(int revision) {
+            this.revision = revision;
+        }
+
+        public int getTotalRevisions() {
+            return totalRevisions;
+        }
+
+        public void setTotalRevisions(int totalRevisions) {
+            this.totalRevisions = totalRevisions;
+        }
+
+        public boolean isCoversWholeDocument() {
+            return coversWholeDocument;
+        }
+
+        public void setCoversWholeDocument(boolean coversWholeDocument) {
+            this.coversWholeDocument = coversWholeDocument;
+        }
+
+        public int getPageNumber() {
+            return pageNumber;
+        }
+
+        public void setPageNumber(int pageNumber) {
+            this.pageNumber = pageNumber;
+        }
+
+        public float[] getPosition() {
+            return position;
+        }
+
+        public void setPosition(float[] position) {
+            this.position = position;
+        }
+
+        public com.codemuni.model.CertificationLevel getCertificationLevel() {
+            return certificationLevel;
+        }
+
+        public void setCertificationLevel(com.codemuni.model.CertificationLevel certificationLevel) {
+            this.certificationLevel = certificationLevel;
+        }
+
+        public boolean isCertificationSignature() {
+            return isCertificationSignature;
+        }
+
+        public void setCertificationSignature(boolean certificationSignature) {
+            this.isCertificationSignature = certificationSignature;
+        }
+
+        public boolean isInvisible() {
+            return isInvisible;
+        }
+
+        public void setInvisible(boolean invisible) {
+            this.isInvisible = invisible;
+        }
+
+        /**
+         * Returns overall verification status based on all checks.
+         * Adobe Reader style: Signature is VALID if core checks pass, even if revocation cannot be verified.
+         */
+        /**
+         * Gets overall verification status according to PDF/ISO 32000 standards
+         * with enhanced security for revocation verification.
+         *
+         * Standard PDF Signature Verification Status:
+         *
+         * INVALID (Red X) - Critical failures that invalidate the signature:
+         *   - Document modified after signing (documentIntact = false)
+         *   - Signature cryptographically invalid (signatureValid = false)
+         *   - Certificate revoked BEFORE signing time (certificateRevoked = true)
+         *   - Certificate expired/invalid AT SIGNING TIME (certificateValid = false)
+         *
+         * UNKNOWN (Yellow ?) - Cannot verify identity or revocation status:
+         *   - Certificate not trusted (cannot build chain to trusted root)
+         *   - Revocation status unknown (OCSP/CRL unavailable or check failed)
+         *   - More secure than Adobe Reader's approach for CCA compliance
+         *
+         * VALID (Green ✓) - All verification checks passed:
+         *   - Document intact
+         *   - Signature cryptographically valid
+         *   - Certificate was valid at signing time
+         *   - Certificate chains to trusted root
+         *   - Certificate revocation verified as valid (not just unchecked)
+         */
+        public VerificationStatus getOverallStatus() {
+            // CRITICAL FAILURES - INVALID
+            // These are conditions that definitively invalidate the signature
+
+            // 1. Document integrity - document was modified after signing
+            if (!documentIntact) {
+                return VerificationStatus.INVALID;
+            }
+
+            // 2. Signature integrity - cryptographic signature is invalid
+            if (!signatureValid) {
+                return VerificationStatus.INVALID;
+            }
+
+            // 3. Certificate validity - certificate was expired/invalid at signing time
+            // This is INVALID per PDF standards (ISO 32000, Adobe Reader behavior)
+            // If cert was expired when document was signed, signature is not valid
+            if (!certificateValid) {
+                return VerificationStatus.INVALID;
+            }
+
+            // 4. Certificate revocation - certificate was revoked before signing
+            // This is INVALID because signer used a revoked certificate
+            if (certificateRevoked) {
+                return VerificationStatus.INVALID;
+            }
+
+            // TRUST ISSUES - UNKNOWN
+            // Certificate is valid but identity or revocation cannot be verified
+
+            // 5. Certificate trust - cannot build chain to trusted root
+            // This is UNKNOWN per PDF standards - signature itself is valid but
+            // we cannot verify the identity of the signer
+            if (!certificateTrusted) {
+                return VerificationStatus.UNKNOWN;
+            }
+
+            // 6. Revocation status verification
+            // If we couldn't verify revocation status, treat as UNKNOWN for security
+            // This is more secure than Adobe Reader which accepts unverified status as VALID
+            if (revocationStatus != null &&
+                (revocationStatus.contains("Validity Unknown") ||
+                 revocationStatus.equals("Not Checked"))) {
+                return VerificationStatus.UNKNOWN;
+            }
+
+            // ALL CHECKS PASSED - VALID
+            // Certificate is trusted AND revocation was successfully verified
+            return VerificationStatus.VALID;
+        }
+
+        public String getStatusMessage() {
+            VerificationStatus status = getOverallStatus();
+            switch (status) {
+                case VALID:
+                    return "Signed and all signatures are valid";
+                case UNKNOWN:
+                    return "Signed but identity could not be verified";
+                case INVALID:
+                    // Provide specific reason for invalidity in priority order
+                    if (!documentIntact) {
+                        return "Document has been modified after signing";
+                    } else if (!signatureValid) {
+                        return "Signature is invalid or corrupted";
+                    } else if (certificateRevoked) {
+                        return "Certificate has been revoked";
+                    } else if (!certificateValid) {
+                        return "Certificate has expired or is not yet valid";
+                    } else {
+                        return "Signature verification failed";
+                    }
+                default:
+                    return "Unknown verification status";
+            }
+        }
+    }
+
+    /**
+     * Result of OCSP check including revocation status and time.
+     */
+    private static class OCSPCheckResult {
+        final boolean isRevoked;
+        final Date revocationTime; // null if not revoked
+
+        OCSPCheckResult(boolean isRevoked, Date revocationTime) {
+            this.isRevoked = isRevoked;
+            this.revocationTime = revocationTime;
+        }
+    }
+
+    /**
+     * Result of timestamp verification.
+     */
+    private static class TimestampVerificationResult {
+        final boolean isValid;
+        final String tsaName;
+        final String errorMessage;
+
+        TimestampVerificationResult(boolean isValid, String tsaName, String errorMessage) {
+            this.isValid = isValid;
+            this.tsaName = tsaName;
+            this.errorMessage = errorMessage;
+        }
     }
 }

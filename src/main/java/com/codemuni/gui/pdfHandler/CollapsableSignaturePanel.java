@@ -454,13 +454,51 @@ public class CollapsableSignaturePanel extends JPanel {
     }
 
     /**
-     * Clears all signatures and shows empty state.
+     * Clears all signatures from the panel and shows empty state.
      */
     public void clearSignatures() {
         signaturesListPanel.removeAll();
         showEmptyState();
         signaturesListPanel.revalidate();
         signaturesListPanel.repaint();
+    }
+
+    /**
+     * Resets the panel to initial state.
+     * Should be called when loading a new PDF.
+     */
+    public void reset() {
+        // Clear all signatures
+        signaturesListPanel.removeAll();
+        showEmptyState();
+
+        // Reset verification state
+        isVerifying = false;
+        if (verificationStatusLabel != null) {
+            verificationStatusLabel.setText("");
+            verificationStatusLabel.setVisible(false);
+        }
+
+        // Reset signature count
+        if (signatureCountLabel != null) {
+            signatureCountLabel.setText("");
+        }
+
+        // Re-enable buttons
+        if (verifyAllButton != null) {
+            verifyAllButton.setEnabled(true);
+        }
+
+        // Hide panel
+        setVisible(false);
+        closed = true;
+        currentWidth = 0;
+        targetWidth = 0;
+        setPreferredSize(new Dimension(0, 0));
+
+        // Refresh UI
+        revalidate();
+        repaint();
     }
 
     private void showEmptyState() {
@@ -854,6 +892,10 @@ public class CollapsableSignaturePanel extends JPanel {
             addCompactStatusRow(detailsPanel, "Certificate Valid", result.isCertificateValid(), false);
             addCompactStatusRow(detailsPanel, "Certificate Trusted", result.isCertificateTrusted(), false);
 
+            // Revocation check - show as valid only if actually verified
+            boolean revocationValid = isRevocationActuallyValid(result);
+            addCompactStatusRow(detailsPanel, "Not Revoked", revocationValid, false);
+
             // Spacer between core and optional checks
             detailsPanel.add(Box.createRigidArea(new Dimension(0, 4)));
 
@@ -1004,6 +1046,29 @@ public class CollapsableSignaturePanel extends JPanel {
                 default:
                     return Color.GRAY;
             }
+        }
+
+        /**
+         * Determines if revocation status is actually valid (verified as not revoked).
+         * Only returns true if revocation was ACTUALLY CHECKED and certificate is valid.
+         * Returns false for "Not Checked", "Validity Unknown", etc.
+         */
+        private boolean isRevocationActuallyValid(SignatureVerificationResult result) {
+            // Certificate is revoked - definitely not valid
+            if (result.isCertificateRevoked()) {
+                return false;
+            }
+
+            // Certificate is NOT revoked, but was revocation actually checked?
+            String revocationStatus = result.getRevocationStatus();
+            if (revocationStatus == null || revocationStatus.isEmpty()) {
+                return false; // No status = not checked
+            }
+
+            // Only return true if status explicitly contains "Valid"
+            // This includes: "Valid (Embedded OCSP)", "Valid (Embedded CRL)", "Valid (Live OCSP)"
+            // This excludes: "Not Checked", "Validity Unknown", etc.
+            return revocationStatus.contains("Valid");
         }
 
         private String truncateText(String text, int maxLength) {

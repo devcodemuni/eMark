@@ -418,17 +418,8 @@ public final class PKCS11KeyStoreProvider implements KeyStoreProvider {
         }
         return serialToAlias.computeIfAbsent(certificateSerialNumber, serial -> {
             try {
-                Enumeration<String> aliases = keyStore.aliases();
-                while (aliases.hasMoreElements()) {
-                    String alias = aliases.nextElement();
-                    Certificate cert = keyStore.getCertificate(alias);
-                    if (cert instanceof X509Certificate) {
-                        String serialHex = ((X509Certificate) cert).getSerialNumber().toString(16);
-                        if (serialHex.equalsIgnoreCase(serial)) {
-                            return alias;
-                        }
-                    }
-                }
+                return com.codemuni.utils.KeyStoreAliasHelper.findAliasBySerialHex(keyStore, serial);
+            } catch (CertificateNotFoundException e) {
                 return null;
             } catch (KeyStoreException e) {
                 throw new RuntimeException(e);

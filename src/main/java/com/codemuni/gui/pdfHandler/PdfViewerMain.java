@@ -191,10 +191,10 @@ public class PdfViewerMain extends JFrame {
 
         // Ensure components are in layered pane
         if (pdfScrollPane.getParent() != layeredPane) {
-            layeredPane.add(pdfScrollPane, Integer.valueOf(JLayeredPane.DEFAULT_LAYER));
+            layeredPane.add(pdfScrollPane, JLayeredPane.DEFAULT_LAYER);
         }
         if (signaturePanel.getParent() != layeredPane) {
-            layeredPane.add(signaturePanel, Integer.valueOf(JLayeredPane.PALETTE_LAYER));
+            layeredPane.add(signaturePanel, JLayeredPane.PALETTE_LAYER);
         }
 
         layeredPane.revalidate();
@@ -265,7 +265,38 @@ public class PdfViewerMain extends JFrame {
         }
     }
 
+    /**
+     * Resets all PDF-related state and UI components.
+     * Should be called before loading a new PDF to ensure clean lifecycle.
+     */
+    private void resetPdfState() {
+        log.info("Resetting PDF state for new document load");
+
+        // Reset verification components
+        verificationService.reset();
+        verificationBanner.reset();
+        signaturePanel.reset();
+        colorManager.reset();
+
+        // Reset sign mode
+        signModeController.resetSignModeUI();
+
+        // Clear PDF state
+        selectedPdfFile = null;
+        pdfPassword = null;
+
+        // Reset UI
+        topBar.setSignButtonVisible(false);
+        topBar.setPageInfoText("");
+        setWindowTitle(null);
+
+        log.debug("PDF state reset completed");
+    }
+
     private void loadAndRenderPdf(File file) {
+        // Reset all state before loading new PDF
+        resetPdfState();
+
         setLoadingState(true);
         SwingUtilities.invokeLater(() -> {
             boolean ok = pdfRendererService.render(file); // handles password internally
@@ -274,14 +305,18 @@ public class PdfViewerMain extends JFrame {
             // setLoadingState(false); // Removed - will be cleared after verification
 
             if (ok) {
+                // Update state
+                selectedPdfFile = file;
                 setWindowTitle(file.getAbsolutePath());
 
                 // Initialize with signing disabled until verification completes
                 topBar.setSignButtonCertified(true); // Temporarily disable until we verify
                 topBar.setSignButtonVisible(true);
 
-                topBar.setPageInfoText("Page: 1/" + pdfRendererService.getPageCountSafe());
                 showPlaceholder(false);
+
+                // Update page display - retry logic handles timing internally
+                pdfScrollPane.forceUpdatePageDisplay();
 
                 // Verify signatures and update signature panel
                 // Keep cursor in WAIT state during verification
@@ -293,7 +328,6 @@ public class PdfViewerMain extends JFrame {
                 showPlaceholder(true);
                 setLoadingState(false); // Clear loading state on error
             }
-            signModeController.resetSignModeUI();
         });
     }
 

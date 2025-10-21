@@ -1,8 +1,6 @@
 package com.codemuni.service;
 
-import com.codemuni.App;
 import com.codemuni.utils.AppConstants;
-import com.codemuni.utils.UIConstants;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -10,6 +8,7 @@ import javax.swing.*;
 import java.awt.*;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 
 /**
  * Handles version checking for eMark.
@@ -116,7 +115,7 @@ public class VersionManager {
 
             // Read the response
             java.io.BufferedReader reader = new java.io.BufferedReader(
-                    new java.io.InputStreamReader(conn.getInputStream(), "UTF-8"));
+                    new java.io.InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8));
             StringBuilder response = new StringBuilder();
             String line;
             while ((line = reader.readLine()) != null) {
@@ -147,7 +146,7 @@ public class VersionManager {
     /**
      * Simple JSON field extractor (avoids dependency on JSON library).
      *
-     * @param json JSON string
+     * @param json  JSON string
      * @param field Field name to extract
      * @return Field value or null if not found
      */
@@ -343,7 +342,7 @@ public class VersionManager {
      * Shows update dialog asynchronously with loading state.
      * Fetches release notes in background and displays dialog when ready.
      *
-     * @param parent Parent component for the dialog
+     * @param parent        Parent component for the dialog
      * @param latestVersion Latest version to fetch notes for
      */
     public static void showUpdateDialogAsync(final Component parent, final String latestVersion) {
@@ -377,12 +376,8 @@ public class VersionManager {
         loadingDialog.add(loadingPanel);
         loadingDialog.pack();
 
-        // Center on screen or relative to parent
-        if (parent != null) {
-            loadingDialog.setLocationRelativeTo(parent);
-        } else {
-            loadingDialog.setLocationRelativeTo(null);
-        }
+        // Center on screen or relative to parent window
+        loadingDialog.setLocationRelativeTo(parentWindow);
 
         loadingDialog.setDefaultCloseOperation(JDialog.DO_NOTHING_ON_CLOSE);
 
@@ -415,7 +410,7 @@ public class VersionManager {
     /**
      * Shows an update dialog with download option and release notes.
      *
-     * @param parent Parent component for the dialog
+     * @param parent        Parent component for the dialog
      * @param latestVersion Latest version available (e.g., "V1.1.2")
      */
     public static void showUpdateDialog(Component parent, String latestVersion) {
@@ -577,12 +572,8 @@ public class VersionManager {
         // Set minimum size before centering
         dialog.setMinimumSize(new Dimension(550, 400));
 
-        // Center on screen if no parent, otherwise center relative to parent
-        if (parent != null) {
-            dialog.setLocationRelativeTo(parent);
-        } else {
-            dialog.setLocationRelativeTo(null); // Centers on screen
-        }
+        // Center on screen if no parent window, otherwise center relative to parent window
+        dialog.setLocationRelativeTo(parentWindow);
 
         dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
         dialog.setVisible(true);
@@ -640,12 +631,8 @@ public class VersionManager {
         dialog.add(contentPanel);
         dialog.pack();
 
-        // Center on screen or relative to parent
-        if (parent != null) {
-            dialog.setLocationRelativeTo(parent);
-        } else {
-            dialog.setLocationRelativeTo(null);
-        }
+        // Center on screen or relative to parent window
+        dialog.setLocationRelativeTo(parentWindow);
 
         dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
         dialog.setResizable(false);
@@ -655,8 +642,8 @@ public class VersionManager {
     /**
      * Makes a label clickable to show update dialog with enhanced visual effects.
      *
-     * @param label Label to make clickable
-     * @param parent Parent component for dialogs
+     * @param label         Label to make clickable
+     * @param parent        Parent component for dialogs
      * @param latestVersion Latest version string
      */
     public static void makeLabelClickable(final JLabel label, final Component parent, final String latestVersion) {
@@ -728,7 +715,7 @@ public class VersionManager {
     /**
      * Adds a subtle pulse animation to the update label.
      *
-     * @param label Label to animate
+     * @param label     Label to animate
      * @param baseColor Base background color
      */
     private static void startPulseAnimation(final JLabel label, final Color baseColor) {
@@ -759,7 +746,7 @@ public class VersionManager {
 
                 // Only update if not being hovered (to avoid interfering with hover state)
                 if (label.getBackground().equals(baseColor) ||
-                    label.getBackground().getRGB() == new Color(r, g, b).getRGB()) {
+                        label.getBackground().getRGB() == new Color(r, g, b).getRGB()) {
                     label.setBackground(new Color(r, g, b));
                 }
             }

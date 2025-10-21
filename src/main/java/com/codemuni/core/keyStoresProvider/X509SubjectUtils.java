@@ -144,4 +144,38 @@ public final class X509SubjectUtils {
 
         return dn.length() > 50 ? dn.substring(0, 47) + "..." : dn;
     }
+
+    /**
+     * Extracts a specific value from a Distinguished Name string.
+     * For example, extractFromDN("CN=John,O=Company,C=US", "O") returns "Company"
+     *
+     * @param dn  The Distinguished Name string
+     * @param key The key to extract (e.g., "CN", "O", "OU", "C")
+     * @return The value for the specified key, or null if not found
+     */
+    public static String extractFromDN(String dn, String key) {
+        if (dn == null || dn.isEmpty() || key == null || key.isEmpty()) {
+            return null;
+        }
+        for (String part : dn.split(",")) {
+            String trimmedPart = part.trim();
+            if (trimmedPart.startsWith(key + "=")) {
+                return trimmedPart.substring(key.length() + 1).trim();
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Formats a Distinguished Name for display by replacing commas with newlines.
+     *
+     * @param dn The Distinguished Name string
+     * @return Formatted DN with each component on a new line
+     */
+    public static String formatDN(String dn) {
+        if (dn == null || dn.isEmpty()) {
+            return "";
+        }
+        return dn.replace(", ", "\n");
+    }
 }

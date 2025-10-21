@@ -1,61 +1,38 @@
 package com.codemuni.utils;
 
 import java.io.File;
-import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
 
 public class FileUtils {
 
-    public static boolean ensureRecursiveDir(String path) {
+    /**
+     * Ensures that a directory exists, creating it (and parent directories) if necessary.
+     * @param path The directory path as a String
+     * @return true if the directory exists or was successfully created
+     */
+    public static boolean ensureDirectory(String path) {
         File dir = new File(path);
         return dir.exists() || dir.mkdirs();
     }
 
-    public static boolean ensureDirectory(String path) {
-        File dir = new File(path);
-        return dir.exists() || dir.mkdir();
-    }
-
+    /**
+     * Ensures that a directory exists, creating it (and parent directories) if necessary.
+     * @param dir The directory as a File object
+     * @return true if the directory exists or was successfully created
+     */
     public static boolean ensureDirectory(File dir) {
         return dir.exists() || dir.mkdirs();
     }
 
-    public static boolean ensureDirectory(Path path) {
-        File dir = path.toFile();
-        return dir.exists() || dir.mkdirs();
-    }
-
-    public static boolean ensureFile(String filePath) {
-        File file = new File(filePath);
-        return file.exists();
-    }
-
-    public static boolean removeFile(String filePath) {
-        File file = new File(filePath);
-        return file.exists() && file.isFile() && file.delete();
-    }
-
+    /**
+     * Checks if a file exists at the specified path.
+     * @param filePath The file path to check
+     * @return true if the file exists and is a regular file
+     */
     public static boolean isFileExist(String filePath) {
         if (filePath == null) {
             return false;
         }
         File file = new File(filePath);
         return file.exists() && file.isFile();
-    }
-
-    public static String[] readAllFilesFromFolder(String folderPath) {
-        File folder = new File(folderPath);
-        if (!folder.exists() || !folder.isDirectory()) return new String[0];
-
-        File[] files = folder.listFiles(File::isFile);
-        if (files == null) return new String[0];
-
-        List<String> paths = new ArrayList<>();
-        for (File file : files) {
-            paths.add(file.getAbsolutePath());
-        }
-
-        return paths.toArray(new String[0]);
     }
 }

@@ -110,8 +110,19 @@ public class SignatureVerificationDialog extends JDialog {
         addInfoRow(panel, "Document:", result.isDocumentIntact() ? "Not Modified" : "Modified",
                 result.isDocumentIntact() ? UIConstants.Colors.STATUS_VALID : UIConstants.Colors.STATUS_ERROR);
 
-        addInfoRow(panel, "Certificate:", result.isCertificateTrusted() ? "Trusted" : "Not Trusted",
+        addInfoRow(panel, "Certificate Valid:", result.isCertificateValid() ? "Yes" : "No",
+                result.isCertificateValid() ? UIConstants.Colors.STATUS_VALID : UIConstants.Colors.STATUS_ERROR);
+
+        addInfoRow(panel, "Certificate Trusted:", result.isCertificateTrusted() ? "Yes" : "No",
                 result.isCertificateTrusted() ? UIConstants.Colors.STATUS_VALID : UIConstants.Colors.STATUS_WARNING);
+
+        // Revocation status - only show as valid if actually verified
+        boolean revocationValid = isRevocationActuallyValid(result);
+        String revocationText = result.isCertificateRevoked() ? "Revoked" :
+                               (revocationValid ? "Not Revoked" : "Not Checked");
+        Color revocationColor = result.isCertificateRevoked() ? UIConstants.Colors.STATUS_ERROR :
+                               (revocationValid ? UIConstants.Colors.STATUS_VALID : UIConstants.Colors.STATUS_WARNING);
+        addInfoRow(panel, "Revocation:", revocationText, revocationColor);
 
         // Show timestamp or LTV status only if enabled
         if (result.isTimestampValid() || result.hasLTV()) {
@@ -199,6 +210,29 @@ public class SignatureVerificationDialog extends JDialog {
             default:
                 return UIConstants.Colors.TEXT_DISABLED;
         }
+    }
+
+    /**
+     * Determines if revocation status is actually valid (verified as not revoked).
+     * Only returns true if revocation was ACTUALLY CHECKED and certificate is valid.
+     * Returns false for "Not Checked", "Validity Unknown", etc.
+     */
+    private boolean isRevocationActuallyValid(SignatureVerificationResult result) {
+        // Certificate is revoked - definitely not valid
+        if (result.isCertificateRevoked()) {
+            return false;
+        }
+
+        // Certificate is NOT revoked, but was revocation actually checked?
+        String revocationStatus = result.getRevocationStatus();
+        if (revocationStatus == null || revocationStatus.isEmpty()) {
+            return false; // No status = not checked
+        }
+
+        // Only return true if status explicitly contains "Valid"
+        // This includes: "Valid (Embedded OCSP)", "Valid (Embedded CRL)", "Valid (Live OCSP)"
+        // This excludes: "Not Checked", "Validity Unknown", etc.
+        return revocationStatus.contains("Valid");
     }
 
 }

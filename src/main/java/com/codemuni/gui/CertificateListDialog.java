@@ -1,6 +1,7 @@
 package com.codemuni.gui;
 
 import com.codemuni.config.ConfigManager;
+import com.codemuni.core.keyStoresProvider.X509SubjectUtils;
 import com.codemuni.core.model.KeystoreAndCertificateInfo;
 import com.codemuni.gui.pdfHandler.PdfViewerMain;
 import com.codemuni.utils.AppConstants;
@@ -421,9 +422,6 @@ public class CertificateListDialog extends JDialog {
     }
 
     private String extractFromDN(String dn, String key) {
-        for (String part : dn.split(",")) {
-            if (part.trim().startsWith(key + "=")) return part.trim().substring(key.length() + 1);
-        }
-        return null;
+        return X509SubjectUtils.extractFromDN(dn, key);
     }
 }

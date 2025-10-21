@@ -164,14 +164,7 @@ public class PKCS12KeyStoreProvider implements KeyStoreProvider {
     }
 
     private String getSigningAlias() throws KeyStoreException {
-        Enumeration<String> aliases = keyStore.aliases();
-        while (aliases.hasMoreElements()) {
-            String alias = aliases.nextElement();
-            if (keyStore.isKeyEntry(alias)) {
-                return alias; // Found alias with private key
-            }
-        }
-        throw new KeyStoreException("No private key entry found in keystore.");
+        return com.codemuni.utils.KeyStoreAliasHelper.findFirstPrivateKeyAlias(keyStore);
     }
 
 

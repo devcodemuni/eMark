@@ -230,7 +230,7 @@ public class SignatureVerificationBanner extends JPanel {
 
         // Track warning conditions (non-critical issues)
         int deprecatedAlgorithm = 0;
-        int noTimestamp = 0;
+        int invalidTimestamp = 0;
         int revocationNotChecked = 0;
 
         // Check if document is certified (any certification signature present)
@@ -242,12 +242,12 @@ public class SignatureVerificationBanner extends JPanel {
             }
         }
 
-        // Categorize each signature with enhanced CCA compliance checks
+        // Categorize each signature using service's getOverallStatus() for consistency
         for (SignatureVerificationResult result : results) {
+            com.codemuni.service.SignatureVerificationService.VerificationStatus status = result.getOverallStatus();
             boolean hasWarnings = hasWarnings(result);
-            boolean hasCriticalErrors = !isSignatureValid(result);
 
-            if (hasCriticalErrors) {
+            if (status == com.codemuni.service.SignatureVerificationService.VerificationStatus.INVALID) {
                 // CRITICAL: Signature is invalid
                 invalid++;
 
@@ -266,32 +266,29 @@ public class SignatureVerificationBanner extends JPanel {
                 } else if (!result.isCertificateValid()) {
                     certificateExpired++;
                 }
-            } else if (hasWarnings) {
-                // WARNING: Signature valid but has non-critical issues
-                validWithWarnings++;
+            } else if (status == com.codemuni.service.SignatureVerificationService.VerificationStatus.UNKNOWN) {
+                // UNKNOWN: Valid cryptographically but cannot verify identity
+                // Check if it has warnings (deprecated algo, invalid timestamp, etc.)
+                if (hasWarnings) {
+                    validWithWarnings++;
 
-                // Track warning types
-                if (hasDeprecatedAlgorithm(result)) {
-                    deprecatedAlgorithm++;
-                }
-                if (!result.isTimestampValid() && !hasTimestamp(result)) {
-                    noTimestamp++;
-                }
-                if (hasRevocationCheckIssue(result)) {
-                    revocationNotChecked++;
-                }
-
-                // Also check trust
-                if (!result.isCertificateTrusted()) {
+                    // Track warning types
+                    if (hasDeprecatedAlgorithm(result)) {
+                        deprecatedAlgorithm++;
+                    }
+                    if (hasInvalidTimestamp(result)) {
+                        invalidTimestamp++;
+                    }
+                    if (hasRevocationCheckIssue(result)) {
+                        revocationNotChecked++;
+                    }
+                } else {
+                    // No warnings, just trust/validity issues
                     validButUntrusted++;
                 }
             } else {
-                // VALID: No errors, no warnings
-                if (result.isCertificateTrusted()) {
-                    validAndTrusted++;
-                } else {
-                    validButUntrusted++; // Valid but trust cannot be established
-                }
+                // VALID: All checks passed including trust
+                validAndTrusted++;
             }
         }
 
@@ -321,7 +318,7 @@ public class SignatureVerificationBanner extends JPanel {
         clearProgress();
         updateUI(newStatus, totalSignatures, validAndTrusted, validButUntrusted, invalid,
                 documentModified, signatureInvalid, certificateRevoked, certificateExpired,
-                weakAlgorithm, deprecatedAlgorithm, noTimestamp, revocationNotChecked,
+                weakAlgorithm, deprecatedAlgorithm, invalidTimestamp, revocationNotChecked,
                 validWithWarnings);
         setVisible(true);
     }
@@ -373,15 +370,40 @@ public class SignatureVerificationBanner extends JPanel {
     }
 
     /**
+     * Resets the banner to initial state.
+     * Should be called when loading a new PDF.
+     */
+    public void reset() {
+        // Hide banner
+        setVisible(false);
+        currentStatus = VerificationStatus.NONE;
+        isCertified = false;
+
+        // Clear messages
+        messageLabel.setText("");
+        progressLabel.setText("");
+        progressLabel.setVisible(false);
+
+        // Reset button state
+        signatureButton.setSelected(false);
+        signatureButton.setText("Show Panel");
+
+        // Clear icon
+        iconLabel.setIcon(null);
+    }
+
+    /**
      * Updates the UI based on verification status.
-     * Enhanced CCA-compliant messages with specific failure/warning reasons:
-     * - GREEN: All signatures valid, trusted, and CCA-compliant
-     * - YELLOW: Valid but with warnings (weak algorithms, no timestamp, trust issues)
+     * Enhanced messages with specific failure/warning reasons:
+     * - GREEN: All signatures valid and trusted
+     * - YELLOW: Valid but with warnings (deprecated algorithms, invalid timestamps, trust issues)
      * - RED: Critical failures (document modified, signature invalid, cert revoked)
+     *
+     * Note: Missing optional features (timestamp/LTV) are NOT shown as warnings.
      */
     private void updateUI(VerificationStatus status, int total, int validTrusted, int validUntrusted, int invalid,
                          int documentModified, int signatureInvalid, int certificateRevoked, int certificateExpired,
-                         int weakAlgorithm, int deprecatedAlgorithm, int noTimestamp, int revocationNotChecked,
+                         int weakAlgorithm, int deprecatedAlgorithm, int invalidTimestamp, int revocationNotChecked,
                          int validWithWarnings) {
         String iconName;
         String message;
@@ -454,34 +476,8 @@ public class SignatureVerificationBanner extends JPanel {
                         message = "At least one signature has problems. " + invalid + " of " + total + " signature" + (invalid > 1 ? "s" : "") + " could not be verified.";
                     }
                 } else if (validWithWarnings > 0) {
-                    // WARNING: Valid but has non-critical issues (CCA recommendations)
-                    StringBuilder warningMsg = new StringBuilder("Signed and all signatures are valid, but ");
-
-                    if (deprecatedAlgorithm > 0 && noTimestamp > 0) {
-                        warningMsg.append(deprecatedAlgorithm).append(" signature")
-                                .append(deprecatedAlgorithm > 1 ? "s use" : " uses")
-                                .append(" deprecated algorithm (SHA-1) and ")
-                                .append(noTimestamp).append(" lack")
-                                .append(noTimestamp > 1 ? "" : "s")
-                                .append(" timestamp (CCA recommends SHA-256+ with timestamp).");
-                    } else if (deprecatedAlgorithm > 0) {
-                        warningMsg.append(deprecatedAlgorithm).append(" signature")
-                                .append(deprecatedAlgorithm > 1 ? "s use" : " uses")
-                                .append(" deprecated algorithm (SHA-1). CCA recommends SHA-256 or stronger.");
-                    } else if (noTimestamp > 0) {
-                        warningMsg.append(noTimestamp).append(" signature")
-                                .append(noTimestamp > 1 ? "s lack" : " lacks")
-                                .append(" timestamp. CCA recommends trusted timestamps for legal validity.");
-                    } else if (revocationNotChecked > 0) {
-                        warningMsg.append("revocation status could not be verified for ")
-                                .append(revocationNotChecked).append(" signature")
-                                .append(revocationNotChecked > 1 ? "s" : "")
-                                .append(".");
-                    } else {
-                        warningMsg.append("some signatures have warnings. See signature panel for details.");
-                    }
-
-                    message = warningMsg.toString();
+                    // WARNING: Valid but has non-critical issues
+                    message = buildWarningMessage(deprecatedAlgorithm, invalidTimestamp, revocationNotChecked);
                 } else if (validUntrusted > 0) {
                     // All valid but some/all not trusted
                     if (validUntrusted == total) {
@@ -519,26 +515,53 @@ public class SignatureVerificationBanner extends JPanel {
     }
 
     /**
-     * Determines if a signature is valid based on verification result.
-     * PDF viewer considers a signature valid if:
-     * 1. Document integrity is intact (not modified after signing)
-     * 2. Signature cryptographically valid
-     * 3. Certificate is valid (not expired)
-     * 4. Certificate is not revoked
-     *
-     * Note: Certificate trust is checked separately and shown as warning, not error
+     * Builds a warning message for signatures that are valid but have non-critical issues.
+     * @param deprecatedAlgo Number of signatures using deprecated algorithms
+     * @param invalidTs Number of signatures with invalid timestamps
+     * @param revocationIssues Number of signatures with revocation check failures
+     * @return User-friendly warning message
      */
-    private boolean isSignatureValid(SignatureVerificationResult result) {
-        // Critical checks - if any fail, signature is INVALID
-        if (!result.isDocumentIntact()) return false;
-        if (!result.isSignatureValid()) return false;
-        if (!result.isCertificateValid()) return false;
-        if (result.isCertificateRevoked()) return false;
+    private String buildWarningMessage(int deprecatedAlgo, int invalidTs, int revocationIssues) {
+        StringBuilder msg = new StringBuilder("Signed and all signatures are valid, but ");
 
-        // If certificate is not trusted, it's still technically "valid" but with warning
-        // PDF viewer shows this as yellow/unknown, not red/invalid
-        return true;
+        // Multiple issues
+        if (deprecatedAlgo > 0 && invalidTs > 0) {
+            msg.append(deprecatedAlgo).append(" signature")
+                    .append(deprecatedAlgo > 1 ? "s use" : " uses")
+                    .append(" deprecated algorithm (SHA-1) and ")
+                    .append(invalidTs).append(" ")
+                    .append(invalidTs > 1 ? "have" : "has")
+                    .append(" invalid timestamp. CCA recommends SHA-256+ with valid timestamps.");
+        }
+        // Deprecated algorithm only
+        else if (deprecatedAlgo > 0) {
+            msg.append(deprecatedAlgo).append(" signature")
+                    .append(deprecatedAlgo > 1 ? "s use" : " uses")
+                    .append(" deprecated algorithm (SHA-1). CCA recommends SHA-256 or stronger.");
+        }
+        // Invalid timestamp only
+        else if (invalidTs > 0) {
+            msg.append(invalidTs).append(" signature")
+                    .append(invalidTs > 1 ? "s have" : " has")
+                    .append(" invalid or untrusted timestamp")
+                    .append(invalidTs > 1 ? "s" : "")
+                    .append(".");
+        }
+        // Revocation check issues only
+        else if (revocationIssues > 0) {
+            msg.append("revocation status could not be verified for ")
+                    .append(revocationIssues).append(" signature")
+                    .append(revocationIssues > 1 ? "s" : "")
+                    .append(".");
+        }
+        // Fallback for other warnings
+        else {
+            msg.append("some signatures have warnings. See signature panel for details.");
+        }
+
+        return msg.toString();
     }
+
 
     /**
      * Returns whether the document is certified.
@@ -604,15 +627,17 @@ public class SignatureVerificationBanner extends JPanel {
      * Checks if signature has non-critical warnings (CCA recommendations).
      * Warnings include:
      * - Deprecated hash algorithms (SHA-1)
-     * - Missing timestamp
+     * - Invalid timestamp (if present)
      * - Revocation check failures
+     *
+     * Note: Missing timestamp/LTV is NOT considered a warning since they are optional features.
      */
     private boolean hasWarnings(SignatureVerificationResult result) {
         // Check for deprecated algorithm warnings
         if (hasDeprecatedAlgorithm(result)) return true;
 
-        // Check for missing timestamp
-        if (!hasTimestamp(result)) return true;
+        // Check for invalid timestamp (only if timestamp is present but invalid)
+        if (hasInvalidTimestamp(result)) return true;
 
         // Check for revocation check issues
         if (hasRevocationCheckIssue(result)) return true;
@@ -661,23 +686,36 @@ public class SignatureVerificationBanner extends JPanel {
     }
 
     /**
-     * Checks if signature has a timestamp.
+     * Checks if signature has a timestamp (valid or invalid).
      */
     private boolean hasTimestamp(SignatureVerificationResult result) {
-        return result.isTimestampValid() || result.getTimestampDate() != null;
+        return result.getTimestampDate() != null;
     }
 
     /**
-     * Checks if revocation check failed or could not be performed.
+     * Checks if signature has a timestamp that is present but invalid.
+     * This is a warning condition - timestamp exists but failed validation.
+     * Note: Missing timestamp is NOT a warning (it's optional).
+     */
+    private boolean hasInvalidTimestamp(SignatureVerificationResult result) {
+        // Only warn if timestamp is present but invalid
+        return hasTimestamp(result) && !result.isTimestampValid();
+    }
+
+    /**
+     * Checks if signature has revocation check issues.
+     * Returns true when revocation status could not be verified (OCSP unavailable, network errors, etc.).
+     * This is more secure than Adobe Reader's approach - we treat unverified status as a warning.
      */
     private boolean hasRevocationCheckIssue(SignatureVerificationResult result) {
-        if (result.getRevocationStatus() == null) return true;
+        if (result.getRevocationStatus() == null) return false;
 
         String status = result.getRevocationStatus();
-        // Check for failure statuses
-        return status.contains("Not Checked") ||
-               status.contains("Unknown") ||
+        // Treat all unverified revocation statuses as warnings for enhanced security
+        return status.contains("Validity Unknown") ||
+               status.contains("Not Checked") ||
                status.contains("Network Error") ||
-               status.contains("Failed");
+               status.contains("Check Failed") ||
+               status.contains("Unreachable");
     }
 }
