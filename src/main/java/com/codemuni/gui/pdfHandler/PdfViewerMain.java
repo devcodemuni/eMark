@@ -5,6 +5,7 @@ import com.codemuni.controller.SignerController;
 import com.codemuni.gui.DialogUtils;
 import com.codemuni.gui.settings.SettingsDialog;
 import com.codemuni.service.SignatureVerificationService;
+import com.codemuni.utils.CursorStateManager;
 import com.codemuni.utils.Utils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -74,6 +75,9 @@ public class PdfViewerMain extends JFrame {
         setPreferredSize(new Dimension(frameWidth, frameHeight));
         setMinimumSize(new Dimension(MIN_WIDTH, MIN_HEIGHT));
         setLocationRelativeTo(null);
+
+        // Initialize cursor state manager
+        CursorStateManager.getInstance().setTargetComponent(this);
 
         // Services
         pdfRendererService = new PdfRendererService(this);
@@ -231,15 +235,15 @@ public class PdfViewerMain extends JFrame {
     }
 
     private void setLoadingState(boolean loading) {
-        setCursor(Cursor.getPredefinedCursor(loading ? Cursor.WAIT_CURSOR : Cursor.DEFAULT_CURSOR));
-        topBar.setLoading(loading);
+        CursorStateManager cursorManager = CursorStateManager.getInstance();
 
-        // Visual feedback during loading
         if (loading) {
-            pdfScrollPane.setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
+            cursorManager.pushCursor(Cursor.WAIT_CURSOR, "pdf-loading");
         } else {
-            pdfScrollPane.setCursor(Cursor.getDefaultCursor());
+            cursorManager.popCursor("pdf-loading");
         }
+
+        topBar.setLoading(loading);
     }
 
     private void openPdf() {
@@ -265,7 +269,10 @@ public class PdfViewerMain extends JFrame {
         setLoadingState(true);
         SwingUtilities.invokeLater(() -> {
             boolean ok = pdfRendererService.render(file); // handles password internally
-            setLoadingState(false);
+
+            // Don't clear loading state yet - keep WAIT cursor during verification
+            // setLoadingState(false); // Removed - will be cleared after verification
+
             if (ok) {
                 setWindowTitle(file.getAbsolutePath());
 
@@ -277,13 +284,14 @@ public class PdfViewerMain extends JFrame {
                 showPlaceholder(false);
 
                 // Verify signatures and update signature panel
-                // Certification check will be done after verification completes
+                // Keep cursor in WAIT state during verification
                 verifyAndUpdateSignatures(file);
             } else {
                 selectedPdfFile = null;
                 topBar.setSignButtonVisible(false);
                 topBar.setPageInfoText("");
                 showPlaceholder(true);
+                setLoadingState(false); // Clear loading state on error
             }
             signModeController.resetSignModeUI();
         });
@@ -308,9 +316,12 @@ public class PdfViewerMain extends JFrame {
         // Run verification in background to avoid blocking UI
         new Thread(() -> {
             try {
-                // Set progress listener for visual feedback
+                // Set progress listener for visual feedback - update both banner and panel
                 verificationService.setProgressListener(message ->
-                        SwingUtilities.invokeLater(() -> signaturePanel.setVerificationStatus(message))
+                        SwingUtilities.invokeLater(() -> {
+                            verificationBanner.updateProgress(message);
+                            signaturePanel.setVerificationStatus(message);
+                        })
                 );
 
                 List<SignatureVerificationService.SignatureVerificationResult> results =
@@ -318,6 +329,9 @@ public class PdfViewerMain extends JFrame {
 
                 // Update UI on EDT
                 SwingUtilities.invokeLater(() -> {
+                    // Clear loading cursor state - verification complete
+                    setLoadingState(false);
+
                     // Clear status message
                     signaturePanel.setVerificationStatus("");
 
@@ -342,10 +356,13 @@ public class PdfViewerMain extends JFrame {
                             log.info("Signing ENABLED: Document allows additional signatures");
                         }
 
-                        // PDF is signed - update signature panel (but keep it closed initially)
+                        // PDF is signed - update signature panel and auto-open it
                         signaturePanel.updateSignatures(results);
                         signaturePanel.setVisible(true); // Make toggle button visible
-                        // Note: Panel remains closed, user can click toggle to open
+
+                        // Auto-open panel to draw user attention to verification results
+                        signaturePanel.openPanel();
+                        verificationBanner.setButtonSelected(true); // Sync button state
 
                         // Update verification banner with results
                         verificationBanner.updateStatus(results);
@@ -353,7 +370,7 @@ public class PdfViewerMain extends JFrame {
                         // Draw colored rectangles on PDF pages
                         drawSignatureRectangles(results);
 
-                        log.info("Signature panel updated with " + results.size() + " signature(s)");
+                        log.info("Signature panel updated with " + results.size() + " signature(s) and auto-opened");
                     } else {
                         // PDF is not signed - enable signing (unsigned PDF, signing allowed)
                         topBar.setSignButtonCertified(false);
@@ -370,6 +387,9 @@ public class PdfViewerMain extends JFrame {
             } catch (Exception e) {
                 log.error("Error verifying signatures", e);
                 SwingUtilities.invokeLater(() -> {
+                    // Clear loading cursor state on error
+                    setLoadingState(false);
+
                     signaturePanel.setVerificationStatus("Verification failed");
                     signaturePanel.clearSignatures();
                     signaturePanel.setVisible(false);

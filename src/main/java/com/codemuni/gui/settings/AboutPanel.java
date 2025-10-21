@@ -77,46 +77,16 @@ public class AboutPanel extends JPanel {
         versionBtn.setAlignmentX(Component.CENTER_ALIGNMENT);
         versionBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         versionBtn.addActionListener(e ->
-                VersionManager.checkUpdateAsync(new VersionManager.VersionCheckCallback() {
+                VersionManager.checkUpdateWithInfoAsync(new VersionManager.UpdateInfoCallback() {
                     @Override
-                    public void onResult(final boolean updateAvailable) {
+                    public void onResult(final VersionManager.UpdateInfo info) {
                         SwingUtilities.invokeLater(new Runnable() {
                             @Override
                             public void run() {
-                                if (updateAvailable) {
-                                    int result = JOptionPane.showOptionDialog(
-                                            AboutPanel.this,
-                                            "<html><div style='text-align:center;'>"
-                                                    + "<p style='font-size:12pt; color:#DDDDDD;'>"
-                                                    + "A new version of <b>eMark</b> is available.</p>"
-                                                    + "<p style='font-size:11pt; color:#AAAAAA; margin-top:5px;'>"
-                                                    + "Visit GitHub to download the latest release.</p>"
-                                                    + "</div></html>",
-                                            "Update Available",
-                                            JOptionPane.YES_NO_OPTION,
-                                            JOptionPane.INFORMATION_MESSAGE,
-                                            null,
-                                            new String[]{"Download", "Later"},
-                                            "Download"
-                                    );
-
-                                    if (result == JOptionPane.YES_OPTION) {
-                                        try {
-                                            Desktop.getDesktop().browse(new URI(VersionManager.GITHUB_RELEASES_LATEST));
-                                        } catch (Exception ex) {
-                                            JOptionPane.showMessageDialog(AboutPanel.this, "Unable to open browser.", "Error", JOptionPane.ERROR_MESSAGE);
-                                        }
-                                    }
+                                if (info.updateAvailable && info.latestVersion != null) {
+                                    VersionManager.showUpdateDialogAsync(AboutPanel.this, info.latestVersion);
                                 } else {
-                                    JOptionPane.showMessageDialog(
-                                            AboutPanel.this,
-                                            "<html><div style='text-align:center;'>"
-                                                    + "<p style='font-size:12pt; color:#DDDDDD;'>"
-                                                    + "You are running the <b>latest version</b> of <b>eMark</b>.</p>"
-                                                    + "</div></html>",
-                                            "Up to Date",
-                                            JOptionPane.INFORMATION_MESSAGE
-                                    );
+                                    VersionManager.showUpToDateDialog(AboutPanel.this);
                                 }
                             }
                         });

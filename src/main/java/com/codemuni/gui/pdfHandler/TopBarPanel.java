@@ -85,14 +85,15 @@ public class TopBarPanel extends JPanel {
         add(rightPanel, BorderLayout.EAST);
 
         // -------------------- Auto Startup Version Check --------------------
-        VersionManager.checkUpdateAsync(new VersionManager.VersionCheckCallback() {
+        VersionManager.checkUpdateWithInfoAsync(new VersionManager.UpdateInfoCallback() {
             @Override
-            public void onResult(final boolean updateAvailable) {
+            public void onResult(final VersionManager.UpdateInfo info) {
                 SwingUtilities.invokeLater(new Runnable() {
                     @Override
                     public void run() {
-                        if (updateAvailable) {
-                            VersionManager.makeLabelClickable(versionStatusLabel);
+                        if (info.updateAvailable && info.latestVersion != null) {
+                            // Make label clickable with async dialog showing
+                            VersionManager.makeLabelClickable(versionStatusLabel, TopBarPanel.this, info.latestVersion);
                         } else {
                             // Hide label if no update
                             versionStatusLabel.setVisible(false);

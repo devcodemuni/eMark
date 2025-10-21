@@ -7,6 +7,7 @@ import com.codemuni.core.exception.UserCancelledOperationException;
 import com.codemuni.core.exception.UserCancelledPasswordEntryException;
 import com.codemuni.gui.DialogUtils;
 import com.codemuni.service.SignatureFieldDetectionService.SignatureFieldInfo;
+import com.codemuni.utils.CursorStateManager;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -561,8 +562,16 @@ public class SignModeController {
         // Disable sign mode UI temporarily
         isSigningInProgress = true;
 
-        // Hide signature field overlays
-        rendererService.hideSignatureFieldOverlays();
+        // Push WAIT cursor immediately for user feedback
+        CursorStateManager.getInstance().pushCursor(Cursor.WAIT_CURSOR, "field-signing");
+
+        // Don't hide overlays immediately - let them show loading state for a moment
+        // This gives users visual feedback that their click registered
+        Timer hideTimer = new Timer(300, e -> {
+            rendererService.hideSignatureFieldOverlays();
+        });
+        hideTimer.setRepeats(false);
+        hideTimer.start();
 
         SwingUtilities.invokeLater(() -> {
             try {
@@ -570,6 +579,7 @@ public class SignModeController {
                 if (selectedFile == null) {
                     DialogUtils.showError(owner, "No file", "No PDF is currently loaded.");
                     isSigningInProgress = false;
+                    CursorStateManager.getInstance().popCursor("field-signing");
                     return;
                 }
 
@@ -585,6 +595,9 @@ public class SignModeController {
                 // Start signing service - this will open certificate selection and appearance dialog
                 signerController.startSigningService();
 
+                // Pop cursor after signing completes
+                CursorStateManager.getInstance().popCursor("field-signing");
+
                 // Reset sign mode after signing completes
                 resetSignModeUI();
                 onSignDone.run();
@@ -592,22 +605,31 @@ public class SignModeController {
             } catch (UserCancelledPasswordEntryException | UserCancelledOperationException ex) {
                 log.info("User cancelled signing: " + ex.getMessage());
                 isSigningInProgress = false;
+                CursorStateManager.getInstance().popCursor("field-signing");
+                // Reset overlay loading states before re-showing
+                rendererService.resetOverlayLoadingStates();
                 // Re-show overlays if user cancelled
                 rendererService.showSignatureFieldOverlays(this::signExistingField);
             } catch (IncorrectPINException ex) {
                 log.warn("Incorrect PIN entered");
                 DialogUtils.showError(owner, "Incorrect PIN", ex.getMessage());
                 isSigningInProgress = false;
+                CursorStateManager.getInstance().popCursor("field-signing");
+                rendererService.resetOverlayLoadingStates();
                 rendererService.showSignatureFieldOverlays(this::signExistingField);
             } catch (MaxPinAttemptsExceededException ex) {
                 log.warn("Maximum PIN attempts exceeded");
                 DialogUtils.showError(owner, "Maximum PIN attempts exceeded, Signing aborted", ex.getMessage());
                 isSigningInProgress = false;
+                CursorStateManager.getInstance().popCursor("field-signing");
+                rendererService.resetOverlayLoadingStates();
                 rendererService.showSignatureFieldOverlays(this::signExistingField);
             } catch (Exception ex) {
                 log.error("Error signing existing field", ex);
                 DialogUtils.showExceptionDialog(owner, "Signing failed - unknown error occurred", ex);
                 isSigningInProgress = false;
+                CursorStateManager.getInstance().popCursor("field-signing");
+                rendererService.resetOverlayLoadingStates();
                 rendererService.showSignatureFieldOverlays(this::signExistingField);
             }
         });

@@ -207,7 +207,8 @@ public class SignatureAppearanceDialog extends JDialog {
         includeCompanyCheckbox = new JCheckBox("Include Org Name");
         includeEntireSubjectDNCheckbox = new JCheckBox("Include Subject DN");
 
-        boolean isPersonalCert = getOrganization(certificate).equalsIgnoreCase("Personal");
+        String orgName = certificate != null ? getOrganization(certificate) : null;
+        boolean isPersonalCert = orgName != null && orgName.equalsIgnoreCase("Personal");
         includeCompanyCheckbox.setEnabled(!isPersonalCert);
         includeCompanyCheckbox.setToolTipText(isPersonalCert
                 ? "Organization name not available for personal certificates."
@@ -280,7 +281,9 @@ public class SignatureAppearanceDialog extends JDialog {
 
         includeEntireSubjectDNCheckbox.addActionListener(e -> {
             boolean selected = includeEntireSubjectDNCheckbox.isSelected();
-            includeCompanyCheckbox.setEnabled(!selected && !getOrganization(certificate).equalsIgnoreCase("Personal"));
+            String org = certificate != null ? getOrganization(certificate) : null;
+            boolean isPersonal = org != null && org.equalsIgnoreCase("Personal");
+            includeCompanyCheckbox.setEnabled(!selected && !isPersonal);
             updatePreviewAndSave();
         });
 
@@ -351,7 +354,8 @@ public class SignatureAppearanceDialog extends JDialog {
         boolean isGraphic = "Name and Graphic".equals(renderingModeCombo.getSelectedItem());
         chooseImageButton.setEnabled(isGraphic);
 
-        boolean isPersonalCert = getOrganization(certificate).equalsIgnoreCase("Personal");
+        String org = certificate != null ? getOrganization(certificate) : null;
+        boolean isPersonalCert = org != null && org.equalsIgnoreCase("Personal");
         includeCompanyCheckbox.setEnabled(!isPersonalCert && !includeEntireSubjectDNCheckbox.isSelected());
     }
 

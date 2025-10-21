@@ -28,6 +28,7 @@ public class SignatureVerificationBanner extends JPanel {
 
     private final JLabel iconLabel;
     private final JLabel messageLabel;
+    private final JLabel progressLabel; // New: Shows real-time progress
     private final JToggleButton signatureButton;
     private VerificationStatus currentStatus;
     private boolean buttonHovered = false;
@@ -57,21 +58,39 @@ public class SignatureVerificationBanner extends JPanel {
         // Left side: Icon and message
         JPanel leftPanel = new JPanel(new BorderLayout());
         leftPanel.setOpaque(false);
-        
+
         // Icon on the left
         iconLabel = new JLabel();
         iconLabel.setBorder(BorderFactory.createEmptyBorder(0, 15, 0, 10));
 
-        // Message in the center
+        // Center panel: Message and progress stacked
+        JPanel centerPanel = new JPanel();
+        centerPanel.setLayout(new BoxLayout(centerPanel, BoxLayout.Y_AXIS));
+        centerPanel.setOpaque(false);
+        centerPanel.setBorder(BorderFactory.createEmptyBorder(0, 5, 0, 15));
+
+        // Message label
         messageLabel = new JLabel();
         messageLabel.setFont(new Font("Segoe UI", Font.BOLD, 13));
-        messageLabel.setBorder(BorderFactory.createEmptyBorder(0, 5, 0, 15));
+        messageLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        // Progress label (initially hidden)
+        progressLabel = new JLabel();
+        progressLabel.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+        progressLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        progressLabel.setVisible(false);
+
+        // Add vertical glue to center content vertically
+        centerPanel.add(Box.createVerticalGlue());
+        centerPanel.add(messageLabel);
+        centerPanel.add(progressLabel);
+        centerPanel.add(Box.createVerticalGlue());
 
         leftPanel.add(iconLabel, BorderLayout.WEST);
-        leftPanel.add(messageLabel, BorderLayout.CENTER);
+        leftPanel.add(centerPanel, BorderLayout.CENTER);
         
         // Right side: Toggle button for signature panel (modern toggle style)
-        signatureButton = new JToggleButton("Signature Panel") {
+        signatureButton = new JToggleButton("Show Panel") {
             @Override
             protected void paintComponent(Graphics g) {
                 Graphics2D g2d = (Graphics2D) g.create();
@@ -257,7 +276,9 @@ public class SignatureVerificationBanner extends JPanel {
         }
 
         currentStatus = newStatus;
-        updateUI(newStatus, totalSignatures, validAndTrusted, validButUntrusted, invalid, 
+        // Clear progress message when showing results
+        clearProgress();
+        updateUI(newStatus, totalSignatures, validAndTrusted, validButUntrusted, invalid,
                 documentModified, signatureInvalid, certificateRevoked, certificateExpired);
         setVisible(true);
     }
@@ -269,10 +290,35 @@ public class SignatureVerificationBanner extends JPanel {
         currentStatus = VerificationStatus.UNKNOWN;
         ImageIcon icon = IconLoader.loadIcon("info.png", ICON_SIZE);
         iconLabel.setIcon(icon);
-        messageLabel.setText("Checking document signatures. Please wait...");
+        messageLabel.setText("Verifying document signatures...");
         setBackground(INFO_BG);
         messageLabel.setForeground(INFO_FG);
+        progressLabel.setForeground(INFO_FG);
+        progressLabel.setText("Starting verification...");
+        progressLabel.setVisible(true);
+        currentBgColor = INFO_BG;
+        updateButtonStyle(INFO_BG);
         setVisible(true);
+    }
+
+    /**
+     * Updates the progress message during verification.
+     */
+    public void updateProgress(String message) {
+        if (currentStatus == VerificationStatus.UNKNOWN && progressLabel != null) {
+            progressLabel.setText(message);
+            progressLabel.setVisible(true);
+        }
+    }
+
+    /**
+     * Clears the progress message.
+     */
+    public void clearProgress() {
+        if (progressLabel != null) {
+            progressLabel.setText("");
+            progressLabel.setVisible(false);
+        }
     }
 
     /**
@@ -444,6 +490,8 @@ public class SignatureVerificationBanner extends JPanel {
      */
     public void setButtonSelected(boolean selected) {
         signatureButton.setSelected(selected);
+        // Update button text based on panel state
+        signatureButton.setText(selected ? "Hide Panel" : "Show Panel");
         updateButtonStyle(currentBgColor);
     }
 

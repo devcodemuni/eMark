@@ -191,23 +191,53 @@ public class SignedSignatureOverlay extends JPanel {
             return;
         }
 
-        Rectangle bounds = calculateScreenBounds(rect);
-        JViewport viewport = scrollPane.getViewport();
-        Rectangle viewRect = viewport.getViewRect();
+        // First, scroll to the page containing this signature
+        // This ensures the page is visible before we try to scroll to the exact position
+        scrollPane.scrollToPage(pageNumber);
 
-        // Check if rectangle is not fully visible
-        if (!viewRect.contains(bounds)) {
-            // Calculate center position
-            int centerX = bounds.x + bounds.width / 2 - viewRect.width / 2;
-            int centerY = bounds.y + bounds.height / 2 - viewRect.height / 2;
+        // Wait for the page scroll to complete, then scroll to the exact signature position
+        SwingUtilities.invokeLater(() -> {
+            Rectangle bounds = calculateScreenBounds(rect);
 
-            Point newPosition = new Point(
-                Math.max(0, centerX),
-                Math.max(0, centerY)
+            // Convert bounds from overlay coordinates to viewport coordinates
+            // The overlay is inside: PdfPanel > PageWrapper > JLayeredPane > SignedSignatureOverlay
+            // We need to find the absolute position in the viewport
+            Point overlayLocationInViewport = SwingUtilities.convertPoint(
+                this,  // From this overlay
+                bounds.x, bounds.y,  // Point in overlay coordinates
+                scrollPane.getViewport().getView()  // To viewport's view (PdfPanel)
             );
 
-            viewport.setViewPosition(newPosition);
-        }
+            // Create rectangle in viewport coordinates
+            Rectangle absoluteBounds = new Rectangle(
+                overlayLocationInViewport.x,
+                overlayLocationInViewport.y,
+                bounds.width,
+                bounds.height
+            );
+
+            JViewport viewport = scrollPane.getViewport();
+            Rectangle viewRect = viewport.getViewRect();
+
+            // Check if rectangle is not fully visible
+            if (!viewRect.contains(absoluteBounds)) {
+                // Calculate center position to show signature in viewport center
+                int centerX = absoluteBounds.x + absoluteBounds.width / 2 - viewRect.width / 2;
+                int centerY = absoluteBounds.y + absoluteBounds.height / 2 - viewRect.height / 2;
+
+                // Ensure we don't scroll beyond document bounds
+                Component view = viewport.getView();
+                int maxX = Math.max(0, view.getWidth() - viewRect.width);
+                int maxY = Math.max(0, view.getHeight() - viewRect.height);
+
+                Point newPosition = new Point(
+                    Math.max(0, Math.min(centerX, maxX)),
+                    Math.max(0, Math.min(centerY, maxY))
+                );
+
+                viewport.setViewPosition(newPosition);
+            }
+        });
     }
 
     /**

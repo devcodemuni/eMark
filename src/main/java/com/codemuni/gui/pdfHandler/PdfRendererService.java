@@ -297,12 +297,25 @@ public class PdfRendererService {
     }
 
     /**
+     * Resets loading state on all signature field overlays.
+     * Should be called when signing is cancelled or completed to restore normal interaction.
+     */
+    public void resetOverlayLoadingStates() {
+        for (SignatureFieldOverlay overlay : fieldOverlays) {
+            overlay.resetLoadingState();
+        }
+    }
+
+    /**
      * Hides all signature field overlays and restores original layout.
      */
     public void hideSignatureFieldOverlays() {
         if (!showSignatureFieldsOverlay) {
             return; // Already hidden
         }
+
+        // Reset loading states before cleanup
+        resetOverlayLoadingStates();
 
         // Cleanup all overlay timers to prevent memory leaks
         for (SignatureFieldOverlay overlay : fieldOverlays) {
