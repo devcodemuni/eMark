@@ -915,11 +915,21 @@ public class SignatureVerificationService {
         // Step 5: Build and validate certificate path to root CA
         try {
             // PDF viewer-style verification: Try to find a valid path
-            CertificateFactory cf = CertificateFactory.getInstance("X.509");
+            CertificateFactory cf = CertificateFactory.getInstance("X.509", "BC");
 
-            // Create PKIXParameters with trust anchors
+            // Create PKIXParameters with root trust anchors
             PKIXParameters params = new PKIXParameters(trustAnchors);
             params.setRevocationEnabled(false); // Disable CRL/OCSP for basic verification
+
+            // Add intermediate certificates for proper chain building
+            try {
+                CertStore intermediateCertStore = getIntermediateCertStore();
+                params.addCertStore(intermediateCertStore);
+                log.info("Added intermediate certificate store for chain building");
+            } catch (Exception e) {
+                log.warn("Could not add intermediate certificates: " + e.getMessage());
+                // Continue without intermediate cert store - may still work if chain is complete in PDF
+            }
 
             // Log certificate chain details
             log.info("Building certificate path:");
@@ -949,8 +959,8 @@ public class SignatureVerificationService {
             // Build certificate path
             CertPath certPath = cf.generateCertPath(certChain);
 
-            // Validate the path
-            CertPathValidator validator = CertPathValidator.getInstance("PKIX");
+            // Validate the path using BouncyCastle provider
+            CertPathValidator validator = CertPathValidator.getInstance("PKIX", "BC");
             PKIXCertPathValidatorResult validationResult = (PKIXCertPathValidatorResult) validator.validate(certPath, params);
 
             TrustAnchor trustAnchor = validationResult.getTrustAnchor();
@@ -996,9 +1006,10 @@ public class SignatureVerificationService {
     /**
      * Builds a complete certificate chain by finding missing issuers in trust store.
      * This is crucial for signature verification when PDF doesn't include all certificates.
+     * Now properly searches BOTH root certificates (trust anchors) AND intermediate certificates.
      *
      * @param originalChain The original certificate chain from PDF
-     * @param trustAnchors  Available trust anchors (root + intermediate CAs)
+     * @param trustAnchors  Available root trust anchors (self-signed CAs)
      * @return Complete certificate chain including missing issuers
      */
     private List<X509Certificate> buildCompleteChain(List<X509Certificate> originalChain, Set<TrustAnchor> trustAnchors) {
@@ -1007,6 +1018,27 @@ public class SignatureVerificationService {
         }
 
         List<X509Certificate> completeChain = new ArrayList<>(originalChain);
+
+        // Get intermediate certificates for chain building
+        Collection<X509Certificate> intermediateCerts = new ArrayList<>();
+        try {
+            intermediateCerts = trustStoreManager.getIntermediateCertificates();
+            log.info("Loaded " + intermediateCerts.size() + " intermediate certificate(s) for chain building");
+        } catch (Exception e) {
+            log.warn("Could not load intermediate certificates: " + e.getMessage());
+        }
+
+        // Combine all available certificates for searching
+        List<X509Certificate> allAvailableCerts = new ArrayList<>();
+        // Add root certificates from trust anchors
+        for (TrustAnchor anchor : trustAnchors) {
+            allAvailableCerts.add(anchor.getTrustedCert());
+        }
+        // Add intermediate certificates
+        allAvailableCerts.addAll(intermediateCerts);
+
+        log.info("Total available certificates for chain building: " + allAvailableCerts.size() +
+                " (Roots: " + trustAnchors.size() + ", Intermediates: " + intermediateCerts.size() + ")");
 
         // Keep looking for issuers until we find a self-signed cert or can't find issuer
         int maxIterations = 10; // Prevent infinite loop
@@ -1021,29 +1053,33 @@ public class SignatureVerificationService {
                 break;
             }
 
-            // Look for issuer in trust anchors
+            // Look for issuer in all available certificates (roots + intermediates)
             boolean foundIssuer = false;
-            for (TrustAnchor anchor : trustAnchors) {
-                X509Certificate anchorCert = anchor.getTrustedCert();
 
-                // Check if this anchor is the issuer using proper DN comparison
-                if (isIssuer(anchorCert, lastCert)) {
-                    log.info("Found issuer in trust store: " + extractCN(anchorCert.getSubjectDN().toString()));
+            // Debug: Log what we're looking for
+            log.info("Looking for issuer of '" + extractCN(lastCert.getSubjectDN().toString()) + "'");
+            log.info("Required issuer DN: " + lastCert.getIssuerX500Principal().getName());
+
+            for (X509Certificate candidateCert : allAvailableCerts) {
+                // Check if this certificate is the issuer using proper DN comparison
+                if (isIssuer(candidateCert, lastCert)) {
+                    log.info("Found potential issuer: " + extractCN(candidateCert.getSubjectDN().toString()));
 
                     // Verify signature to ensure this is the correct issuer
-                    if (verifyCertificateSignature(lastCert, anchorCert)) {
+                    if (verifyCertificateSignature(lastCert, candidateCert)) {
                         // Avoid duplicates
                         boolean isDuplicate = false;
                         for (X509Certificate existingCert : completeChain) {
-                            if (existingCert.equals(anchorCert)) {
+                            if (existingCert.equals(candidateCert)) {
                                 isDuplicate = true;
                                 break;
                             }
                         }
 
                         if (!isDuplicate) {
-                            completeChain.add(anchorCert);
-                            log.info("Added verified issuer to chain - new chain length: " + completeChain.size());
+                            completeChain.add(candidateCert);
+                            String certType = isSelfSignedCertificate(candidateCert) ? "root" : "intermediate";
+                            log.info("Added verified " + certType + " certificate to chain - new chain length: " + completeChain.size());
                         }
 
                         foundIssuer = true;
@@ -1056,7 +1092,13 @@ public class SignatureVerificationService {
 
             // If we couldn't find issuer, stop looking
             if (!foundIssuer) {
-                log.info("Could not find issuer '" + extractCN(lastCert.getIssuerDN().toString()) + "' in trust store");
+                log.warn("Could not find issuer '" + extractCN(lastCert.getIssuerDN().toString()) + "' in available certificates");
+                log.warn("Required issuer DN: " + lastCert.getIssuerX500Principal().getName());
+                log.warn("Available certificates:");
+                for (X509Certificate cert : allAvailableCerts) {
+                    log.warn("  - " + extractCN(cert.getSubjectDN().toString()) +
+                            " [DN: " + cert.getSubjectX500Principal().getName() + "]");
+                }
                 break;
             }
 
@@ -1082,8 +1124,18 @@ public class SignatureVerificationService {
             return false;
         }
 
-        // Use X500Principal for proper DN comparison (normalized)
-        boolean dnMatch = cert.getSubjectX500Principal().equals(cert.getIssuerX500Principal());
+        // Use X500Principal CANONICAL format for proper DN comparison
+        // This handles cases where DN components are in different order
+        boolean dnMatch;
+        try {
+            String subjectDN = cert.getSubjectX500Principal().getName(javax.security.auth.x500.X500Principal.CANONICAL);
+            String issuerDN = cert.getIssuerX500Principal().getName(javax.security.auth.x500.X500Principal.CANONICAL);
+            dnMatch = subjectDN.equals(issuerDN);
+        } catch (Exception e) {
+            log.warn("Error comparing DNs in canonical form, falling back to direct comparison", e);
+            // Fallback to direct comparison
+            dnMatch = cert.getSubjectX500Principal().equals(cert.getIssuerX500Principal());
+        }
 
         if (!dnMatch) {
             return false;
@@ -1112,9 +1164,76 @@ public class SignatureVerificationService {
             return false;
         }
 
-        // Compare issuer DN of subject with subject DN of issuer using X500Principal
-        // X500Principal provides normalized DN comparison
-        return subjectCert.getIssuerX500Principal().equals(issuerCert.getSubjectX500Principal());
+        // Compare issuer DN of subject with subject DN of issuer
+        // Use component-wise comparison since CANONICAL format doesn't normalize component order
+        try {
+            String requiredIssuerDN = subjectCert.getIssuerX500Principal().getName(javax.security.auth.x500.X500Principal.CANONICAL);
+            String candidateSubjectDN = issuerCert.getSubjectX500Principal().getName(javax.security.auth.x500.X500Principal.CANONICAL);
+
+            // Parse DNs into component sets for order-independent comparison
+            boolean match = compareDNs(requiredIssuerDN, candidateSubjectDN);
+
+            return match;
+        } catch (Exception e) {
+            log.warn("Error comparing DNs, falling back to direct comparison", e);
+            // Fallback to direct comparison
+            return subjectCert.getIssuerX500Principal().equals(issuerCert.getSubjectX500Principal());
+        }
+    }
+
+    /**
+     * Compares two DNs component-wise, ignoring order.
+     * Handles cases where DN components are in different order.
+     */
+    private boolean compareDNs(String dn1, String dn2) {
+        if (dn1 == null || dn2 == null) {
+            return false;
+        }
+
+        // Quick equality check first
+        if (dn1.equals(dn2)) {
+            return true;
+        }
+
+        try {
+            // Parse DNs into component maps
+            Map<String, String> components1 = parseDN(dn1);
+            Map<String, String> components2 = parseDN(dn2);
+
+            // Compare component maps
+            return components1.equals(components2);
+        } catch (Exception e) {
+            log.warn("Error parsing DNs for comparison: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Parses a DN string into a map of attribute=value pairs.
+     */
+    private Map<String, String> parseDN(String dn) {
+        Map<String, String> components = new HashMap<>();
+
+        if (dn == null || dn.isEmpty()) {
+            return components;
+        }
+
+        // Split by comma (handling escaped commas)
+        String[] parts = dn.split("(?<!\\\\),");
+
+        for (String part : parts) {
+            part = part.trim();
+            int equalsIndex = part.indexOf('=');
+            if (equalsIndex > 0) {
+                String key = part.substring(0, equalsIndex).trim().toLowerCase();
+                String value = part.substring(equalsIndex + 1).trim().toLowerCase();
+                // Remove any backslash escapes
+                value = value.replace("\\,", ",");
+                components.put(key, value);
+            }
+        }
+
+        return components;
     }
 
     /**
@@ -1131,9 +1250,13 @@ public class SignatureVerificationService {
 
         try {
             subjectCert.verify(issuerCert.getPublicKey());
+            log.info("      ✓ Signature verification SUCCESS");
             return true;
         } catch (Exception e) {
-            log.debug("Certificate signature verification failed: " + e.getMessage());
+            log.warn("      ✗ Signature verification FAILED: " + e.getClass().getSimpleName() + " - " + e.getMessage());
+            log.warn("        Subject cert serial: " + subjectCert.getSerialNumber());
+            log.warn("        Issuer cert serial: " + issuerCert.getSerialNumber());
+            log.warn("        This means the issuer certificate in trust store has a DIFFERENT KEY than the one that actually signed this certificate");
             return false;
         }
     }
@@ -1816,14 +1939,69 @@ public class SignatureVerificationService {
 
             log.info("Step 2: Timestamp date validated - " + DATE_FORMAT.format(timestampDate));
 
-            // STEP 3: Try to extract TSA information
+            // STEP 3: Try to extract TSA information using BouncyCastle
             String tsaName = "Timestamp Authority";
             try {
-                // iText 5 limitation: Cannot easily access TSA certificate
-                // We'll use generic name for now
-                log.info("Step 3: Timestamp present and validated");
+                // Try to get the timestamp token using reflection (iText 5 limitation workaround)
+                // PdfPKCS7 internally has a TimeStampToken but doesn't expose it publicly
+                java.lang.reflect.Method method = pkcs7.getClass().getDeclaredMethod("getTimeStampToken");
+                method.setAccessible(true);
+                Object tsToken = method.invoke(pkcs7);
+
+                if (tsToken != null) {
+                    // Use BouncyCastle TimeStampToken to extract signer info
+                    org.bouncycastle.tsp.TimeStampToken timeStampToken = (org.bouncycastle.tsp.TimeStampToken) tsToken;
+
+                    // Get the TSA signer certificate from the timestamp token
+                    org.bouncycastle.cert.X509CertificateHolder[] certs =
+                        (org.bouncycastle.cert.X509CertificateHolder[]) timeStampToken.getCertificates().getMatches(null).toArray(new org.bouncycastle.cert.X509CertificateHolder[0]);
+
+                    if (certs != null && certs.length > 0) {
+                        // The first certificate is typically the TSA signer certificate
+                        org.bouncycastle.cert.X509CertificateHolder tsaCert = certs[0];
+                        org.bouncycastle.asn1.x500.X500Name x500name = tsaCert.getSubject();
+
+                        // Extract CN from X500Name
+                        org.bouncycastle.asn1.x500.RDN[] rdns = x500name.getRDNs(org.bouncycastle.asn1.x500.style.BCStyle.CN);
+                        if (rdns != null && rdns.length > 0) {
+                            tsaName = org.bouncycastle.asn1.x500.style.IETFUtils.valueToString(rdns[0].getFirst().getValue());
+                            log.info("Step 3: Timestamp TSA extracted (from token): " + tsaName);
+                        } else {
+                            // Use full DN if CN not found
+                            tsaName = x500name.toString();
+                            log.info("Step 3: Timestamp TSA extracted (full DN): " + tsaName);
+                        }
+                    }
+                }
+            } catch (NoSuchMethodException e) {
+                // Method not available, try alternative approach
+                log.debug("getTimeStampToken method not available, using fallback");
+                try {
+                    // Alternative: Try to access through PdfPKCS7's signature
+                    Certificate[] certs = pkcs7.getSignCertificateChain();
+                    if (certs != null && certs.length > 0) {
+                        // Check each certificate for Time Stamping EKU
+                        for (Certificate cert : certs) {
+                            if (cert instanceof X509Certificate) {
+                                X509Certificate x509 = (X509Certificate) cert;
+                                List<String> extKeyUsage = x509.getExtendedKeyUsage();
+                                if (extKeyUsage != null && extKeyUsage.contains("1.3.6.1.5.5.7.3.8")) {
+                                    tsaName = x509.getSubjectDN().toString();
+                                    log.info("Step 3: Timestamp TSA extracted (from cert chain): " + extractCN(tsaName));
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                } catch (Exception ex) {
+                    log.debug("Could not extract TSA from certificate chain", ex);
+                }
             } catch (Exception e) {
                 log.debug("Could not extract TSA details", e);
+            }
+
+            if (tsaName.equals("Timestamp Authority")) {
+                log.info("Step 3: Timestamp present and validated (TSA details not available)");
             }
 
             // STEP 4: Verify signature includes timestamp (basic integrity check)
@@ -2111,16 +2289,33 @@ public class SignatureVerificationService {
     }
 
     /**
-     * Gets all trust anchors from TrustStoreManager.
-     * This includes ONLY:
-     * - Embedded certificates (resources/trusted-certs/) - read-only
-     * - Manual certificates (user.home/.emark/trusted-certs/) - user-managed
+     * Gets ONLY root trust anchors from TrustStoreManager.
+     * Returns only self-signed root certificates, NOT intermediate certificates.
+     * This includes:
+     * - Embedded root certificates (resources/trusted-certs/) - read-only
+     * - Manual root certificates (user.home/.emark/trusted-certs/) - user-managed
      * <p>
      * NOTE: OS trust stores (Windows, macOS, Linux) are NOT used.
+     * <p>
+     * For intermediate certificates, use getIntermediateCertStore().
      */
     private Set<TrustAnchor> getTrustStore() throws Exception {
-        // Use TrustStoreManager to get all trust anchors (embedded + manual only)
-        return trustStoreManager.getAllTrustAnchors();
+        // Use TrustStoreManager to get ONLY root trust anchors (self-signed)
+        // Intermediate certificates are filtered out
+        return trustStoreManager.getRootTrustAnchors();
+    }
+
+    /**
+     * Gets intermediate certificates as a CertStore for certificate path building.
+     * These are non-root certificates needed to build the chain from signer to root.
+     *
+     * @return CertStore containing intermediate certificates
+     * @throws Exception if CertStore creation fails
+     */
+    private CertStore getIntermediateCertStore() throws Exception {
+        Collection<X509Certificate> intermediateCerts = trustStoreManager.getIntermediateCertificates();
+        return CertStore.getInstance("Collection",
+                new CollectionCertStoreParameters(intermediateCerts));
     }
 
     /**
@@ -2548,16 +2743,15 @@ public class SignatureVerificationService {
             }
 
             // 6. Revocation status verification
-            // If we couldn't verify revocation status, treat as UNKNOWN for security
-            // This is more secure than Adobe Reader which accepts unverified status as VALID
-            if (revocationStatus != null &&
-                (revocationStatus.contains("Validity Unknown") ||
-                 revocationStatus.equals("Not Checked"))) {
-                return VerificationStatus.UNKNOWN;
-            }
+            // Following Adobe Reader behavior: if revocation status cannot be determined
+            // (no OCSP/CRL available), but all other checks passed, treat as VALID
+            // Note: If certificate was actually revoked, it would fail at check #4 above
+            // "Validity Unknown" or "Not Checked" means we couldn't check, not that it's revoked
 
             // ALL CHECKS PASSED - VALID
-            // Certificate is trusted AND revocation was successfully verified
+            // Document intact, signature valid, certificate valid and trusted
+            // Revocation status is advisory - if we couldn't check it, we accept the signature
+            // This matches Adobe Reader, Foxit, and other PDF viewers' behavior
             return VerificationStatus.VALID;
         }
 

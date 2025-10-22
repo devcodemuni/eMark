@@ -22,7 +22,6 @@ import java.util.function.Consumer;
  * Features:
  * - Complete signature verification details
  * - Certificate chain tree visualization
- * - Trust management (add untrusted certs to trust list)
  * - Re-verification capability
  * - Color-coded status indicators
  * - Export certificate functionality
@@ -216,14 +215,27 @@ public class SignaturePropertiesDialog extends JDialog {
     }
 
     private ImageIcon getHeaderIcon() {
-        boolean isValid = result.getOverallStatus() == VerificationStatus.VALID;
+        VerificationStatus status = result.getOverallStatus();
         boolean isCertified = result.isCertificationSignature();
 
         String iconPath;
         if (isCertified) {
+            // Certified signature icon (blue certified badge)
             iconPath = "certified.png";
         } else {
-            iconPath = isValid ? "shield.png" : "shield-invalid.png";
+            // Choose icon based on verification status
+            switch (status) {
+                case VALID:
+                    iconPath = "shield.png"; // Green shield (valid)
+                    break;
+                case INVALID:
+                    iconPath = "shield-invalid.png"; // Red shield (invalid)
+                    break;
+                case UNKNOWN:
+                default:
+                    iconPath = "shield-warning.png"; // Yellow shield (warning/unknown)
+                    break;
+            }
         }
 
         return IconLoader.loadIcon(iconPath, 48, 48);
@@ -262,6 +274,28 @@ public class SignaturePropertiesDialog extends JDialog {
         JScrollPane advancedTab = createAdvancedTab();
         tabbedPane.addTab("Advanced", null, advancedTab, "Timestamp, LTV, and document information");
 
+        // Reset scroll position to top when tab is changed
+        tabbedPane.addChangeListener(e -> {
+            int selectedIndex = tabbedPane.getSelectedIndex();
+            if (selectedIndex >= 0 && selectedIndex < tabbedPane.getTabCount()) {
+                Component selectedComponent = tabbedPane.getComponentAt(selectedIndex);
+                if (selectedComponent instanceof JScrollPane) {
+                    JScrollPane scrollPane = (JScrollPane) selectedComponent;
+                    SwingUtilities.invokeLater(() -> {
+                        scrollPane.getVerticalScrollBar().setValue(0);
+                        scrollPane.getHorizontalScrollBar().setValue(0);
+                    });
+                }
+            }
+        });
+
+        // Set initial scroll position to top for all tabs
+        SwingUtilities.invokeLater(() -> {
+            overviewTab.getVerticalScrollBar().setValue(0);
+            certificateTab.getVerticalScrollBar().setValue(0);
+            advancedTab.getVerticalScrollBar().setValue(0);
+        });
+
         return tabbedPane;
     }
 
@@ -299,12 +333,6 @@ public class SignaturePropertiesDialog extends JDialog {
         panel.add(createSignatureDetailsPanel());
         panel.add(Box.createRigidArea(new Dimension(0, 15)));
 
-        // Trust Management Section (if not trusted)
-        if (!result.isCertificateTrusted() && result.getSignerCertificate() != null) {
-            panel.add(createTrustManagementPanel());
-            panel.add(Box.createRigidArea(new Dimension(0, 15)));
-        }
-
         JScrollPane scrollPane = new JScrollPane(panel);
         scrollPane.setBorder(null);
         scrollPane.getViewport().setBackground(BG_COLOR);
@@ -340,13 +368,8 @@ public class SignaturePropertiesDialog extends JDialog {
         addStatusRowWithTooltip(section, "Certificate Trusted", result.isCertificateTrusted(),
                 "Certificate chains to a trusted root authority");
 
-        // Revocation status: only show as valid if actually verified
-        boolean revocationActuallyValid = isRevocationActuallyValid(result);
-        String revocationTooltip = revocationActuallyValid ?
-                "Certificate revocation verified - not revoked" :
-                "Revocation status: " + result.getRevocationStatus();
-        addStatusRowWithTooltip(section, "Not Revoked", revocationActuallyValid,
-                result.getRevocationStatus(), revocationTooltip);
+        // Revocation status: show VALID/REVOKED/UNKNOWN
+        addRevocationStatusRow(section);
 
         // Optional but recommended features
         String timestampStatus = getTimestampStatusText();
@@ -409,77 +432,6 @@ public class SignaturePropertiesDialog extends JDialog {
             String allowMore = result.getCertificationLevel().allowsSignatures() ? "Yes" : "No";
             addDetailRow(section, "Can Add More Signatures", allowMore);
         }
-
-        return section;
-    }
-
-    private JPanel createTrustManagementPanel() {
-        JPanel section = createSection("Trust Management");
-
-        // Warning message
-        JPanel warningPanel = new JPanel(new BorderLayout(10, 0));
-        warningPanel.setBackground(new Color(60, 50, 40));
-        warningPanel.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(new Color(180, 140, 80), 1),
-            new EmptyBorder(12, 12, 12, 12)
-        ));
-        warningPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 100));
-
-        JLabel warningIcon = new JLabel("!");
-        warningIcon.setFont(new Font("Segoe UI", Font.BOLD, 24));
-        warningIcon.setForeground(new Color(255, 193, 7));
-        warningPanel.add(warningIcon, BorderLayout.WEST);
-
-        JPanel textPanel = new JPanel();
-        textPanel.setLayout(new BoxLayout(textPanel, BoxLayout.Y_AXIS));
-        textPanel.setBackground(new Color(60, 50, 40));
-
-        JLabel titleLabel = new JLabel("Certificate Not Trusted");
-        titleLabel.setFont(UIConstants.Fonts.NORMAL_BOLD);
-        titleLabel.setForeground(new Color(255, 193, 7));
-        titleLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
-
-        JTextArea messageArea = new JTextArea(
-            "This certificate is not in your trust list. You can add it to trust this signer in the future."
-        );
-        messageArea.setFont(UIConstants.Fonts.SMALL_PLAIN);
-        messageArea.setForeground(UIConstants.Colors.TEXT_MUTED);
-        messageArea.setBackground(new Color(60, 50, 40));
-        messageArea.setLineWrap(true);
-        messageArea.setWrapStyleWord(true);
-        messageArea.setEditable(false);
-        messageArea.setBorder(null);
-        messageArea.setAlignmentX(Component.LEFT_ALIGNMENT);
-
-        textPanel.add(titleLabel);
-        textPanel.add(Box.createRigidArea(new Dimension(0, 4)));
-        textPanel.add(messageArea);
-
-        warningPanel.add(textPanel, BorderLayout.CENTER);
-
-        // Add trust button
-        JButton addTrustButton = new JButton("Add to Trust List");
-        addTrustButton.setFont(UIConstants.Fonts.NORMAL_BOLD);
-        addTrustButton.setPreferredSize(new Dimension(150, 32));
-        addTrustButton.setFocusPainted(false);
-        addTrustButton.setBackground(new Color(76, 175, 80));
-        addTrustButton.setForeground(Color.WHITE);
-        addTrustButton.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(new Color(56, 142, 60), 1),
-            new EmptyBorder(6, 12, 6, 12)
-        ));
-        addTrustButton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        addTrustButton.addActionListener(e -> addCertificateToTrustList());
-
-        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
-        buttonPanel.setBackground(new Color(60, 50, 40));
-        buttonPanel.add(addTrustButton);
-
-        textPanel.add(Box.createRigidArea(new Dimension(0, 8)));
-        textPanel.add(buttonPanel);
-
-        section.add(warningPanel);
-        section.add(Box.createRigidArea(new Dimension(0, 8)));
 
         return section;
     }
@@ -619,6 +571,10 @@ public class SignaturePropertiesDialog extends JDialog {
         panel.setBackground(BG_COLOR);
         panel.setBorder(new EmptyBorder(15, 15, 15, 15));
 
+        // Revocation Status Details
+        panel.add(createRevocationStatusPanel());
+        panel.add(Box.createRigidArea(new Dimension(0, 15)));
+
         // Timestamp Information
         panel.add(createTimestampPanel());
         panel.add(Box.createRigidArea(new Dimension(0, 15)));
@@ -640,23 +596,104 @@ public class SignaturePropertiesDialog extends JDialog {
         return scrollPane;
     }
 
+    private JPanel createRevocationStatusPanel() {
+        JPanel section = createSection("Revocation Status Details");
+
+        // Determine status
+        String statusText;
+        Color statusColor;
+        String explanation;
+
+        if (result.isCertificateRevoked()) {
+            statusText = "REVOKED";
+            statusColor = INVALID_COLOR;
+            explanation = "The certificate used to sign this document has been revoked by the issuing authority. This signature is not valid.";
+        } else if (isRevocationActuallyValid(result)) {
+            statusText = "VALID (Verified)";
+            statusColor = VALID_COLOR;
+            String revStatus = result.getRevocationStatus();
+            if (revStatus != null && revStatus.contains("Embedded")) {
+                explanation = "Certificate revocation status was verified using validation data embedded in the PDF document.";
+            } else {
+                explanation = "Certificate revocation status was verified. The certificate has not been revoked.";
+            }
+        } else {
+            statusText = "UNKNOWN";
+            statusColor = UNKNOWN_COLOR;
+            String revStatus = result.getRevocationStatus();
+            if (revStatus != null && revStatus.contains("Validity Unknown")) {
+                explanation = "Revocation status could not be determined. The certificate does not contain OCSP or CRL information, " +
+                             "or the revocation service is not available. The signature may still be valid, but revocation cannot be verified.";
+            } else if (revStatus != null && revStatus.equals("Not Checked")) {
+                explanation = "Revocation status was not checked during this verification session.";
+            } else {
+                explanation = "Revocation status could not be determined. " +
+                             (revStatus != null ? "Reason: " + revStatus : "No revocation information available.");
+            }
+        }
+
+        addColoredDetailRow(section, "Status", statusText, statusColor);
+
+        // Add raw revocation status detail
+        String rawStatus = result.getRevocationStatus();
+        if (rawStatus != null && !rawStatus.isEmpty()) {
+            addDetailRow(section, "Detail", rawStatus);
+        }
+
+        // Add explanation
+        addWrappedTextRow(section, "Explanation", explanation, UIConstants.Colors.TEXT_MUTED);
+
+        // Add revocation time if certificate is revoked
+        if (result.isCertificateRevoked()) {
+            addDetailRow(section, "Revoked", "Yes");
+        }
+
+        return section;
+    }
+
     private JPanel createTimestampPanel() {
         JPanel section = createSection("Timestamp Information");
 
         if (result.getTimestampDate() != null || result.isTimestampValid()) {
+            // Timestamp Date
             if (result.getTimestampDate() != null) {
                 addDetailRow(section, "Timestamp Date", DATE_FORMAT.format(result.getTimestampDate()));
             }
 
-            if (result.getTimestampAuthority() != null) {
-                addDetailRow(section, "Authority", result.getTimestampAuthority());
+            // Timestamp Authority (TSA)
+            String tsaName = result.getTimestampAuthority();
+            if (tsaName != null && !tsaName.trim().isEmpty()) {
+                String commonName = extractCommonName(tsaName);
+                if (commonName != null && !commonName.equals("Unknown")) {
+                    addDetailRow(section, "TSA Signer Name", commonName);
+                }
+                addDetailRow(section, "TSA Authority (Full DN)", tsaName);
+            } else {
+                // If TSA name not available, show placeholder
+                addDetailRow(section, "TSA Authority", "Not available");
             }
 
+            // Status
             String status = result.isTimestampValid() ? "Verified" : "Could not verify";
             Color statusColor = result.isTimestampValid() ? VALID_COLOR : UNKNOWN_COLOR;
             addColoredDetailRow(section, "Status", status, statusColor);
+
+            // Add explanation
+            if (result.isTimestampValid()) {
+                addWrappedTextRow(section, "Info",
+                    "This signature includes a trusted timestamp from a Time Stamping Authority (TSA). " +
+                    "The timestamp proves when the document was signed, making the signature valid even if the certificate expires later.",
+                    UIConstants.Colors.TEXT_MUTED);
+            } else {
+                addWrappedTextRow(section, "Info",
+                    "Timestamp is present but could not be verified.",
+                    UIConstants.Colors.TEXT_MUTED);
+            }
         } else {
             addDetailRow(section, "Status", "Not included in signature");
+            addWrappedTextRow(section, "Info",
+                "This signature does not include a timestamp. The signing time is self-declared and cannot be independently verified.",
+                UIConstants.Colors.TEXT_MUTED);
         }
 
         return section;
@@ -685,6 +722,24 @@ public class SignaturePropertiesDialog extends JDialog {
     private JPanel createDocumentInfoPanel() {
         JPanel section = createSection("Document Information");
 
+        // Signature field name
+        addDetailRow(section, "Field Name", result.getFieldName());
+
+        // Certification level
+        if (result.getCertificationLevel() != null) {
+            String certLevel = result.isCertificationSignature() ?
+                result.getCertificationLevel().getLabel() :
+                "Not Certified (Approval Signature)";
+            Color certColor = result.isCertificationSignature() ? INFO_COLOR : UIConstants.Colors.TEXT_MUTED;
+            addColoredDetailRow(section, "Certification", certLevel, certColor);
+        }
+
+        // Signature algorithm
+        if (result.getSignatureAlgorithm() != null && !result.getSignatureAlgorithm().isEmpty()) {
+            addDetailRow(section, "Algorithm", result.getSignatureAlgorithm());
+        }
+
+        // Document revisions
         if (result.getTotalRevisions() > 0) {
             addDetailRow(section, "Signature Revision", result.getRevision() + " of " + result.getTotalRevisions());
 
@@ -693,19 +748,40 @@ public class SignaturePropertiesDialog extends JDialog {
             addColoredDetailRow(section, "Covers Whole Document", coversAll, coverColor);
 
             if (!result.isCoversWholeDocument()) {
-                addDetailRow(section, "Note",
-                    "This signature does not cover the entire document. Changes may have been made after signing.");
+                addWrappedTextRow(section, "Note",
+                    "This signature does not cover the entire document. Changes may have been made after signing.",
+                    UNKNOWN_COLOR);
             }
         }
 
+        // Page location
         if (result.getPageNumber() > 0) {
-            addDetailRow(section, "Signature Location", "Page " + result.getPageNumber());
+            addDetailRow(section, "Page Location", "Page " + result.getPageNumber());
         }
 
+        // Visibility
         String visibility = result.isInvisible() ?
             "Invisible (no visual appearance)" :
-            "Visible on page " + result.getPageNumber();
+            "Visible on document";
         addDetailRow(section, "Visibility", visibility);
+
+        // Signature date (self-declared)
+        if (result.getSignDate() != null) {
+            addDetailRow(section, "Signing Date (Self-declared)", DATE_FORMAT.format(result.getSignDate()));
+        }
+
+        // Reason, Location, Contact Info (if available)
+        if (result.getReason() != null && !result.getReason().isEmpty()) {
+            addDetailRow(section, "Reason", result.getReason());
+        }
+
+        if (result.getLocation() != null && !result.getLocation().isEmpty()) {
+            addDetailRow(section, "Location", result.getLocation());
+        }
+
+        if (result.getContactInfo() != null && !result.getContactInfo().isEmpty()) {
+            addDetailRow(section, "Contact Info", result.getContactInfo());
+        }
 
         return section;
     }
@@ -764,42 +840,6 @@ public class SignaturePropertiesDialog extends JDialog {
     // ====================================================================================
     // ACTIONS
     // ====================================================================================
-
-    private void addCertificateToTrustList() {
-        try {
-            // Export certificate to temp file
-            java.security.cert.X509Certificate cert = result.getSignerCertificate();
-            String cn = X509SubjectUtils.extractCommonNameFromDN(cert.getSubjectDN().toString());
-
-            // Create temp file
-            File tempFile = File.createTempFile("cert_", ".pem");
-            String pemCert = "-----BEGIN CERTIFICATE-----\n" +
-                           java.util.Base64.getMimeEncoder(64, new byte[]{'\n'})
-                               .encodeToString(cert.getEncoded()) +
-                           "\n-----END CERTIFICATE-----\n";
-            java.nio.file.Files.write(tempFile.toPath(), pemCert.getBytes());
-
-            // Add to trust store
-            String alias = cn.replaceAll("[^a-zA-Z0-9]", "_");
-            trustStoreManager.addTrustCertificate(tempFile, alias);
-
-            // Delete temp file
-            tempFile.delete();
-
-            JOptionPane.showMessageDialog(this,
-                "Certificate added to trust list successfully!\n\n" +
-                "Certificate: " + cn + "\n\n" +
-                "You may need to re-verify signatures to see the updated trust status.",
-                "Certificate Added",
-                JOptionPane.INFORMATION_MESSAGE);
-
-        } catch (Exception ex) {
-            JOptionPane.showMessageDialog(this,
-                "Failed to add certificate to trust list:\n" + ex.getMessage(),
-                "Error",
-                JOptionPane.ERROR_MESSAGE);
-        }
-    }
 
     private void reVerifySignature() {
         try {
@@ -1131,6 +1171,85 @@ public class SignaturePropertiesDialog extends JDialog {
         panel.add(Box.createRigidArea(new Dimension(0, 6)));
     }
 
+    /**
+     * Adds revocation status row with VALID/REVOKED/UNKNOWN display.
+     */
+    private void addRevocationStatusRow(JPanel panel) {
+        JPanel row = new JPanel(new GridBagLayout());
+        row.setBackground(SECTION_BG);
+        row.setMaximumSize(new Dimension(Integer.MAX_VALUE, 28));
+        row.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.anchor = GridBagConstraints.WEST;
+        gbc.insets = new Insets(2, 0, 2, 12);
+
+        // Label
+        JLabel labelComp = new JLabel("Revocation status:");
+        labelComp.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        labelComp.setForeground(UIConstants.Colors.TEXT_SECONDARY);
+        labelComp.setPreferredSize(new Dimension(LABEL_WIDTH, labelComp.getPreferredSize().height));
+        gbc.gridx = 0;
+        gbc.weightx = 0;
+        row.add(labelComp, gbc);
+
+        // Determine revocation status
+        String statusText;
+        Color statusColor;
+        boolean showTick = false;
+        String tooltip;
+
+        if (result.isCertificateRevoked()) {
+            statusText = "REVOKED";
+            statusColor = INVALID_COLOR;
+            tooltip = "Certificate has been revoked - signature is not valid";
+        } else if (isRevocationActuallyValid(result)) {
+            statusText = "VALID";
+            statusColor = VALID_COLOR;
+            showTick = true;
+            tooltip = "Certificate revocation verified - not revoked";
+        } else {
+            statusText = "UNKNOWN";
+            statusColor = UNKNOWN_COLOR;
+            String revStatus = result.getRevocationStatus();
+            if (revStatus != null && !revStatus.isEmpty()) {
+                tooltip = "Revocation status: " + revStatus;
+            } else {
+                tooltip = "Revocation status could not be determined";
+            }
+        }
+
+        // Status panel with icon + text
+        JPanel statusPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 0));
+        statusPanel.setOpaque(false);
+
+        if (showTick) {
+            ImageIcon icon = IconLoader.loadIcon("green_tick.png", 14, 14);
+            if (icon != null) {
+                statusPanel.add(new JLabel(icon));
+            }
+        }
+
+        JLabel valueComp = new JLabel(statusText);
+        valueComp.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        valueComp.setForeground(statusColor);
+        statusPanel.add(valueComp);
+
+        gbc.gridx = 1;
+        gbc.weightx = 1.0;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        row.add(statusPanel, gbc);
+
+        // Add tooltip
+        row.setToolTipText(tooltip);
+        labelComp.setToolTipText(tooltip);
+        statusPanel.setToolTipText(tooltip);
+        valueComp.setToolTipText(tooltip);
+
+        panel.add(row);
+        panel.add(Box.createRigidArea(new Dimension(0, 6)));
+    }
+
     private void addDetailRow(JPanel panel, String label, String value) {
         addDetailRow(panel, label, value, UIConstants.Colors.TEXT_MUTED);
     }
@@ -1201,6 +1320,75 @@ public class SignaturePropertiesDialog extends JDialog {
 
         panel.add(textArea);
         panel.add(Box.createRigidArea(new Dimension(0, 4)));
+    }
+
+    /**
+     * Adds a row with wrapped text (for long explanations).
+     */
+    private void addWrappedTextRow(JPanel panel, String label, String text, Color textColor) {
+        if (text == null || text.isEmpty()) {
+            return;
+        }
+
+        JPanel row = new JPanel(new GridBagLayout());
+        row.setBackground(SECTION_BG);
+        row.setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
+        row.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.anchor = GridBagConstraints.NORTHWEST;
+        gbc.insets = new Insets(2, 0, 2, 12);
+
+        // Label
+        JLabel labelComp = new JLabel(label + ":");
+        labelComp.setFont(UIConstants.Fonts.NORMAL_BOLD);
+        labelComp.setForeground(UIConstants.Colors.TEXT_SECONDARY);
+        labelComp.setPreferredSize(new Dimension(LABEL_WIDTH, labelComp.getPreferredSize().height));
+        gbc.gridx = 0;
+        gbc.gridy = 0;
+        gbc.weightx = 0;
+        gbc.fill = GridBagConstraints.NONE;
+        row.add(labelComp, gbc);
+
+        // Wrapped text area
+        JTextArea textArea = new JTextArea(text);
+        textArea.setFont(UIConstants.Fonts.SMALL_PLAIN);
+        textArea.setForeground(textColor);
+        textArea.setBackground(SECTION_BG);
+        textArea.setLineWrap(true);
+        textArea.setWrapStyleWord(true);
+        textArea.setEditable(false);
+        textArea.setBorder(null);
+        textArea.setRows(3); // Minimum rows
+
+        gbc.gridx = 1;
+        gbc.weightx = 1.0;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        row.add(textArea, gbc);
+
+        panel.add(row);
+        panel.add(Box.createRigidArea(new Dimension(0, 8)));
+    }
+
+    /**
+     * Extracts Common Name from Distinguished Name.
+     */
+    private String extractCommonName(String dn) {
+        if (dn == null || dn.trim().isEmpty()) {
+            return "Unknown";
+        }
+
+        // Try to extract CN= field
+        String[] parts = dn.split(",");
+        for (String part : parts) {
+            part = part.trim();
+            if (part.toUpperCase().startsWith("CN=")) {
+                return part.substring(3).trim();
+            }
+        }
+
+        // If no CN found, return the original DN
+        return dn.trim();
     }
 
     // ====================================================================================

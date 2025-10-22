@@ -892,9 +892,8 @@ public class CollapsableSignaturePanel extends JPanel {
             addCompactStatusRow(detailsPanel, "Certificate Valid", result.isCertificateValid(), false);
             addCompactStatusRow(detailsPanel, "Certificate Trusted", result.isCertificateTrusted(), false);
 
-            // Revocation check - show as valid only if actually verified
-            boolean revocationValid = isRevocationActuallyValid(result);
-            addCompactStatusRow(detailsPanel, "Not Revoked", revocationValid, false);
+            // Revocation status - show VALID/REVOKED/UNKNOWN
+            addRevocationStatusRow(detailsPanel, result);
 
             // Spacer between core and optional checks
             detailsPanel.add(Box.createRigidArea(new Dimension(0, 4)));
@@ -959,6 +958,90 @@ public class CollapsableSignaturePanel extends JPanel {
                     Graphics2D g2d = (Graphics2D) g.create();
                     g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
                     g2d.setColor(bgColor);
+                    g2d.fillRoundRect(0, 0, getWidth(), getHeight(), 4, 4);
+                    g2d.dispose();
+                    super.paintComponent(g);
+                }
+            };
+            valueLabel.setFont(new Font("Segoe UI", Font.BOLD, 10));
+            valueLabel.setForeground(fgColor);
+            valueLabel.setHorizontalAlignment(SwingConstants.CENTER);
+            valueLabel.setVerticalAlignment(SwingConstants.CENTER);
+            valueLabel.setOpaque(false);
+            valueLabel.setBorder(new EmptyBorder(3, 8, 3, 8));
+            gbc.gridx = 2;
+            gbc.weightx = 0;
+            gbc.fill = GridBagConstraints.NONE;
+            gbc.insets = new Insets(0, 10, 0, 0);
+            row.add(valueLabel, gbc);
+
+            panel.add(row);
+        }
+
+        /**
+         * Adds revocation status row with VALID/REVOKED/UNKNOWN values.
+         */
+        private void addRevocationStatusRow(JPanel panel, SignatureVerificationResult result) {
+            JPanel row = new JPanel(new GridBagLayout());
+            row.setOpaque(false);
+            row.setAlignmentX(Component.LEFT_ALIGNMENT);
+            row.setBorder(new EmptyBorder(3, 0, 3, 0));
+            row.setMaximumSize(new Dimension(Integer.MAX_VALUE, 26));
+
+            GridBagConstraints gbc = new GridBagConstraints();
+            gbc.anchor = GridBagConstraints.WEST;
+            gbc.fill = GridBagConstraints.NONE;
+            gbc.insets = new Insets(0, 0, 0, 10);
+            gbc.gridy = 0;
+
+            // Determine revocation status
+            String statusText;
+            Color bgColor;
+            Color fgColor;
+            ImageIcon icon;
+
+            if (result.isCertificateRevoked()) {
+                statusText = "REVOKED";
+                bgColor = SignatureColors.withAlpha(SignatureColors.INVALID_COLOR, 30);
+                fgColor = SignatureColors.lighter(SignatureColors.INVALID_COLOR, 0.4f);
+                icon = IconLoader.loadIcon(ICON_INVALID, 16, 16);
+            } else if (isRevocationActuallyValid(result)) {
+                statusText = "VALID";
+                bgColor = SignatureColors.withAlpha(SignatureColors.VALID_COLOR, 30);
+                fgColor = SignatureColors.lighter(SignatureColors.VALID_COLOR, 0.4f);
+                icon = IconLoader.loadIcon(ICON_VALID, 16, 16);
+            } else {
+                statusText = "UNKNOWN";
+                bgColor = SignatureColors.withAlpha(SignatureColors.UNKNOWN_COLOR, 30);
+                fgColor = SignatureColors.lighter(SignatureColors.UNKNOWN_COLOR, 0.1f);
+                icon = IconLoader.loadIcon(ICON_UNKNOWN, 16, 16);
+            }
+
+            // Icon: Status indicator
+            JLabel iconLabel = new JLabel(icon);
+            iconLabel.setVerticalAlignment(SwingConstants.CENTER);
+            gbc.gridx = 0;
+            gbc.weightx = 0;
+            row.add(iconLabel, gbc);
+
+            // Label: "Revocation status"
+            JLabel labelText = new JLabel("Revocation status");
+            labelText.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+            labelText.setForeground(new Color(210, 215, 220));
+            labelText.setVerticalAlignment(SwingConstants.CENTER);
+            gbc.gridx = 1;
+            gbc.weightx = 1.0;
+            gbc.fill = GridBagConstraints.HORIZONTAL;
+            row.add(labelText, gbc);
+
+            // Value badge with color coding
+            Color finalBgColor = bgColor;
+            JLabel valueLabel = new JLabel(statusText) {
+                @Override
+                protected void paintComponent(Graphics g) {
+                    Graphics2D g2d = (Graphics2D) g.create();
+                    g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                    g2d.setColor(finalBgColor);
                     g2d.fillRoundRect(0, 0, getWidth(), getHeight(), 4, 4);
                     g2d.dispose();
                     super.paintComponent(g);

@@ -3,10 +3,8 @@ package com.codemuni.service;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
-import javax.net.ssl.TrustManagerFactory;
 import java.io.*;
 import java.nio.file.*;
-import java.security.KeyStore;
 import java.security.cert.*;
 import java.util.*;
 
@@ -222,7 +220,7 @@ public class TrustStoreManager {
      */
     private List<X509Certificate> parseCertificatesFromStream(InputStream is) throws Exception {
         List<X509Certificate> certificates = new ArrayList<>();
-        CertificateFactory cf = CertificateFactory.getInstance("X.509");
+        CertificateFactory cf = CertificateFactory.getInstance("X.509", "BC");
 
         // Mark the stream to allow reset if needed
         if (!is.markSupported()) {
@@ -314,7 +312,7 @@ public class TrustStoreManager {
                     // Decode and parse this certificate
                     try {
                         byte[] decoded = Base64.getDecoder().decode(currentCert.toString());
-                        CertificateFactory cf = CertificateFactory.getInstance("X.509");
+                        CertificateFactory cf = CertificateFactory.getInstance("X.509", "BC");
                         X509Certificate cert = (X509Certificate) cf.generateCertificate(
                             new ByteArrayInputStream(decoded));
                         certificates.add(cert);
@@ -447,99 +445,114 @@ public class TrustStoreManager {
     }
 
     /**
-     * Gets all trust anchors from configured sources (embedded + manual + OS trust store).
-     * Now includes OS trust stores for PDF viewer compatibility.
+     * Gets all trust anchors from configured sources (embedded + manual).
+     * IMPORTANT: This method now returns ONLY root certificates (self-signed) as trust anchors.
+     * Intermediate certificates are filtered out and should be obtained via getIntermediateCertificates().
+     *
+     * For proper certificate validation:
+     * - Use this method for PKIXParameters.setTrustAnchors()
+     * - Use getIntermediateCertificates() for PKIXParameters.addCertStore()
+     *
+     * @return Set of trust anchors (only root certificates)
      */
     public Set<TrustAnchor> getAllTrustAnchors() {
+        // Delegate to getRootTrustAnchors() for correct behavior
+        return getRootTrustAnchors();
+    }
+
+    /**
+     * Checks if a certificate is a root certificate (self-signed).
+     * Root certificates have subject == issuer.
+     *
+     * @param cert Certificate to check
+     * @return true if root certificate, false if intermediate
+     */
+    private boolean isRootCertificate(X509Certificate cert) {
+        // Root certificate is self-signed: subject DN equals issuer DN
+        // Use CANONICAL format for proper normalized comparison
+        try {
+            String subjectDN = cert.getSubjectX500Principal().getName(javax.security.auth.x500.X500Principal.CANONICAL);
+            String issuerDN = cert.getIssuerX500Principal().getName(javax.security.auth.x500.X500Principal.CANONICAL);
+            return subjectDN.equals(issuerDN);
+        } catch (Exception e) {
+            log.warn("Error comparing DNs in canonical form, falling back to direct comparison", e);
+            // Fallback to direct comparison
+            return cert.getSubjectX500Principal().equals(cert.getIssuerX500Principal());
+        }
+    }
+
+    /**
+     * Gets ONLY root trust anchors from configured sources (embedded + manual).
+     * This method filters out intermediate certificates and returns only self-signed root certificates.
+     * Use this for PKIXParameters.setTrustAnchors()
+     *
+     * @return Set of trust anchors (only root certificates)
+     */
+    public Set<TrustAnchor> getRootTrustAnchors() {
         if (!initialized) {
             initialize();
         }
 
-        Set<TrustAnchor> trustAnchors = new HashSet<>();
+        Set<TrustAnchor> rootAnchors = new HashSet<>();
 
-        // Add embedded certificates
+        // Add only root certificates from embedded certificates
         for (X509Certificate cert : embeddedCertificates) {
-            trustAnchors.add(new TrustAnchor(cert, null));
+            if (isRootCertificate(cert)) {
+                rootAnchors.add(new TrustAnchor(cert, null));
+                log.debug("Root certificate: " + cert.getSubjectDN().toString());
+            }
         }
 
-        // Add manual certificates
+        // Add only root certificates from manual certificates
         for (X509Certificate cert : manualCertificates.values()) {
-            trustAnchors.add(new TrustAnchor(cert, null));
+            if (isRootCertificate(cert)) {
+                rootAnchors.add(new TrustAnchor(cert, null));
+                log.debug("Root certificate (manual): " + cert.getSubjectDN().toString());
+            }
         }
 
-        // Add OS trust store certificates for PDF viewer compatibility
-        try {
-            Set<TrustAnchor> osTrustAnchors = getOSTrustAnchors();
-            trustAnchors.addAll(osTrustAnchors);
-            log.info("Added " + osTrustAnchors.size() + " OS trust store certificate(s)");
-        } catch (Exception e) {
-            log.warn("Could not load OS trust store certificates: " + e.getMessage());
-        }
+        log.info("Root trust anchors: " + rootAnchors.size() +
+                " (filtered from " + (embeddedCertificates.size() + manualCertificates.size()) +
+                " total certificates)");
 
-        log.debug("Total trust anchors: " + trustAnchors.size() +
-                " (Embedded: " + embeddedCertificates.size() +
-                ", Manual: " + manualCertificates.size() + ")");
-
-        return trustAnchors;
+        return rootAnchors;
     }
 
     /**
-     * Gets Windows trust store anchors (Windows only).
-     * Now used for signature verification to match PDF viewer behavior.
+     * Gets ONLY intermediate certificates from configured sources (embedded + manual).
+     * These certificates are needed for certificate path/chain building.
+     * Use this with PKIXParameters.addCertStore() for proper chain validation.
+     *
+     * @return Collection of intermediate certificates (non-root certificates)
      */
-    private Set<TrustAnchor> getOSTrustAnchors() throws Exception {
-        Set<TrustAnchor> anchors = new HashSet<>();
-
-        if (!isWindows()) {
-            log.debug("OS trust store not supported on non-Windows systems");
-            return anchors;
+    public Collection<X509Certificate> getIntermediateCertificates() {
+        if (!initialized) {
+            initialize();
         }
 
-        try {
-            // Use Windows-MY keystore for personal certificates
-            KeyStore windowsMY = KeyStore.getInstance("Windows-MY");
-            windowsMY.load(null, null);
+        List<X509Certificate> intermediates = new ArrayList<>();
 
-            // Use Windows-ROOT keystore for root certificates
-            KeyStore windowsROOT = KeyStore.getInstance("Windows-ROOT");
-            windowsROOT.load(null, null);
-
-            // Collect certificates from both keystores
-            Set<X509Certificate> osCertificates = new HashSet<>();
-
-            // Add certificates from Windows-MY (personal certificates)
-            Enumeration<String> myAliases = windowsMY.aliases();
-            while (myAliases.hasMoreElements()) {
-                String alias = myAliases.nextElement();
-                Certificate cert = windowsMY.getCertificate(alias);
-                if (cert instanceof X509Certificate) {
-                    osCertificates.add((X509Certificate) cert);
-                }
+        // Add only intermediate certificates from embedded certificates
+        for (X509Certificate cert : embeddedCertificates) {
+            if (!isRootCertificate(cert)) {
+                intermediates.add(cert);
+                log.debug("Intermediate certificate (embedded): " + cert.getSubjectDN().toString());
             }
-
-            // Add certificates from Windows-ROOT (root certificates)
-            Enumeration<String> rootAliases = windowsROOT.aliases();
-            while (rootAliases.hasMoreElements()) {
-                String alias = rootAliases.nextElement();
-                Certificate cert = windowsROOT.getCertificate(alias);
-                if (cert instanceof X509Certificate) {
-                    osCertificates.add((X509Certificate) cert);
-                }
-            }
-
-            // Convert to TrustAnchors
-            for (X509Certificate cert : osCertificates) {
-                anchors.add(new TrustAnchor(cert, null));
-            }
-
-            log.info("Loaded " + anchors.size() + " certificate(s) from Windows trust store");
-
-        } catch (Exception e) {
-            log.warn("Could not access Windows trust store: " + e.getMessage());
-            throw e;
         }
 
-        return anchors;
+        // Add only intermediate certificates from manual certificates
+        for (X509Certificate cert : manualCertificates.values()) {
+            if (!isRootCertificate(cert)) {
+                intermediates.add(cert);
+                log.debug("Intermediate certificate (manual): " + cert.getSubjectDN().toString());
+            }
+        }
+
+        log.info("Intermediate certificates: " + intermediates.size() +
+                " (filtered from " + (embeddedCertificates.size() + manualCertificates.size()) +
+                " total certificates)");
+
+        return intermediates;
     }
 
     /**
@@ -597,10 +610,5 @@ public class TrustStoreManager {
             return filename.substring(lastDot + 1);
         }
         return "pem"; // default
-    }
-
-    private boolean isWindows() {
-        String os = System.getProperty("os.name");
-        return os != null && os.toLowerCase().contains("win");
     }
 }

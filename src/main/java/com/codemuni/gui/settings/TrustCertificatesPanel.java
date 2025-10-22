@@ -542,14 +542,36 @@ public class TrustCertificatesPanel extends JPanel {
 
                 // Add certificate - TrustStoreManager will handle multiple certs if present
                 trustStoreManager.addTrustCertificate(certFile, alias);
+
+                // Update status label
                 statusLabel.setText("Certificate(s) added successfully: " + cn);
                 statusLabel.setForeground(UIConstants.Colors.STATUS_VALID);
+
+                // Show success feedback dialog
+                String issuer = X509SubjectUtils.extractCommonNameFromDN(cert.getIssuerDN().toString());
+                String validUntil = DATE_FORMAT.format(cert.getNotAfter());
+
+                JOptionPane.showMessageDialog(this,
+                    "Certificate added successfully!\n\n" +
+                    "Certificate: " + cn + "\n" +
+                    "Issuer: " + issuer + "\n" +
+                    "Valid Until: " + validUntil + "\n\n" +
+                    "The certificate is now available for signature verification.",
+                    "Success",
+                    JOptionPane.INFORMATION_MESSAGE);
+
                 loadCertificates(); // Refresh list
             } catch (Exception e) {
+                // Update status label
                 statusLabel.setText("Failed to add certificate: " + e.getMessage());
                 statusLabel.setForeground(UIConstants.Colors.STATUS_ERROR);
+
+                // Show error feedback dialog
                 JOptionPane.showMessageDialog(this,
-                    "Failed to add certificate:\n" + e.getMessage(),
+                    "Failed to add certificate:\n\n" +
+                    e.getMessage() + "\n\n" +
+                    "Please ensure the file is a valid certificate in one of the supported formats:\n" +
+                    "PEM, DER, CER, CRT, PKCS#7 (.p7b, .p7c, .spc)",
                     "Error",
                     JOptionPane.ERROR_MESSAGE);
             }
