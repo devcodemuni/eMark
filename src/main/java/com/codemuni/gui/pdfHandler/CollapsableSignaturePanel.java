@@ -27,15 +27,11 @@ public class CollapsableSignaturePanel extends JPanel {
     private static final int PANEL_WIDTH = 380;
     private static final int ANIMATION_STEPS = 10;
     private static final int ANIMATION_DELAY = 20;
-    private static final int ICON_SIZE = 16;
 
     // Icon files
     private static final String ICON_VALID = "check_circle.png";
     private static final String ICON_INVALID = "cross_circle.png";
     private static final String ICON_UNKNOWN = "question_circle.png";
-
-    // Date format for signature items (shared across all items)
-    private static final SimpleDateFormat SIGNATURE_DATE_FORMAT = new SimpleDateFormat("MMM dd, yyyy HH:mm");
 
     private final JPanel contentPanel;
     private final JPanel headerPanel;
@@ -43,7 +39,6 @@ public class CollapsableSignaturePanel extends JPanel {
     private final JLabel emptyLabel;
     private final JLabel signatureCountLabel;
 
-    private final boolean visible = true;
     private boolean closed = true; // Initially hidden as per requirement
     private Timer animationTimer;
     private int currentWidth = 0; // Start with 0 width since initially hidden
@@ -716,14 +711,7 @@ public class CollapsableSignaturePanel extends JPanel {
             if (result.isInvisible()) {
                 nameRow.add(Box.createRigidArea(new Dimension(8, 0)));
 
-                JLabel invisibleBadge = new JLabel("INVISIBLE");
-                invisibleBadge.setFont(new Font("Segoe UI", Font.BOLD, 9));
-                invisibleBadge.setForeground(new Color(255, 255, 255));
-                invisibleBadge.setOpaque(true);
-                invisibleBadge.setBackground(new Color(158, 158, 158));
-                invisibleBadge.setBorder(new EmptyBorder(3, 7, 3, 7));
-                invisibleBadge.setAlignmentY(Component.CENTER_ALIGNMENT);
-                invisibleBadge.setToolTipText("This signature has no visual appearance on the document");
+                JLabel invisibleBadge = getInvisibleBadge();
                 nameRow.add(invisibleBadge);
             }
 
@@ -741,33 +729,7 @@ public class CollapsableSignaturePanel extends JPanel {
             headerPanel.add(centerPanel, BorderLayout.CENTER);
 
             // Right: Modern "Details" button with proper alignment
-            JButton propertiesBtn = new JButton("Details") {
-                @Override
-                protected void paintComponent(Graphics g) {
-                    Graphics2D g2d = (Graphics2D) g.create();
-                    g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-
-                    // Button background
-                    if (getModel().isRollover()) {
-                        g2d.setColor(new Color(66, 133, 244, 40));
-                    } else {
-                        g2d.setColor(new Color(66, 133, 244, 20));
-                    }
-                    g2d.fillRoundRect(0, 0, getWidth(), getHeight(), 4, 4);
-
-                    g2d.dispose();
-                    super.paintComponent(g);
-                }
-            };
-            propertiesBtn.setFont(new Font("Segoe UI", Font.PLAIN, 12));
-            propertiesBtn.setForeground(new Color(100, 160, 255));
-            propertiesBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-            propertiesBtn.setFocusPainted(false);
-            propertiesBtn.setBorderPainted(false);
-            propertiesBtn.setContentAreaFilled(false);
-            propertiesBtn.setOpaque(false);
-            propertiesBtn.setBorder(new EmptyBorder(4, 10, 4, 10));
-            propertiesBtn.setAlignmentY(Component.CENTER_ALIGNMENT);
+            JButton propertiesBtn = createMoreDetailsButton();
 
             propertiesBtn.addActionListener(e -> showDetailedProperties());
 
@@ -801,6 +763,86 @@ public class CollapsableSignaturePanel extends JPanel {
 
             return panel;
         }
+
+        private JLabel getInvisibleBadge() {
+            JLabel invisibleBadge = new JLabel("INVISIBLE");
+            invisibleBadge.setFont(new Font("Segoe UI", Font.BOLD, 9));
+            invisibleBadge.setForeground(new Color(255, 255, 255));
+            invisibleBadge.setOpaque(true);
+            invisibleBadge.setBackground(new Color(158, 158, 158));
+            invisibleBadge.setBorder(new EmptyBorder(3, 7, 3, 7));
+            invisibleBadge.setAlignmentY(Component.CENTER_ALIGNMENT);
+            invisibleBadge.setToolTipText("This signature has no visual appearance on the document");
+            return invisibleBadge;
+        }
+
+        private JButton createMoreDetailsButton() {
+            JButton propertiesBtn = new JButton("More Details") {
+                private final Color baseColor = new Color(66, 133, 244, 20);
+                private final Color hoverColor = new Color(66, 133, 244, 60);
+                private final Color pressColor = new Color(66, 133, 244, 100);
+                private Color currentColor = baseColor;
+
+                {
+                    // Basic appearance
+                    setFocusPainted(false);
+                    setBorderPainted(false);
+                    setContentAreaFilled(false);
+                    setOpaque(false);
+                    setBorder(new EmptyBorder(4, 10, 4, 10));
+                    setForeground(new Color(100, 160, 255));
+                    setFont(new Font("Segoe UI", Font.BOLD, 12));
+
+                    // Hover and click feedback
+                    addMouseListener(new java.awt.event.MouseAdapter() {
+                        @Override
+                        public void mouseEntered(java.awt.event.MouseEvent e) {
+                            currentColor = hoverColor;
+                            repaint();
+                        }
+
+                        @Override
+                        public void mouseExited(java.awt.event.MouseEvent e) {
+                            currentColor = baseColor;
+                            repaint();
+                        }
+
+                        @Override
+                        public void mousePressed(java.awt.event.MouseEvent e) {
+                            currentColor = pressColor;
+                            repaint();
+                        }
+
+                        @Override
+                        public void mouseReleased(java.awt.event.MouseEvent e) {
+                            if (getBounds().contains(e.getPoint())) {
+                                currentColor = hoverColor;
+                            } else {
+                                currentColor = baseColor;
+                            }
+                            repaint();
+                        }
+                    });
+                }
+
+                @Override
+                protected void paintComponent(Graphics g) {
+                    Graphics2D g2d = (Graphics2D) g.create();
+                    g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+                    // Smooth rounded background
+                    g2d.setColor(currentColor);
+                    g2d.fillRoundRect(0, 0, getWidth(), getHeight(), 6, 6);
+
+                    super.paintComponent(g);
+                    g2d.dispose();
+                }
+            };
+
+            propertiesBtn.setAlignmentY(Component.CENTER_ALIGNMENT);
+            return propertiesBtn;
+        }
+
 
         private JPanel getSummaryPanel() {
             JPanel summaryRow = new JPanel(new BorderLayout(10, 0));

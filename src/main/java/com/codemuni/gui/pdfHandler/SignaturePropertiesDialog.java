@@ -324,10 +324,10 @@ public class SignaturePropertiesDialog extends JDialog {
             panel.add(Box.createRigidArea(new Dimension(0, 15)));
         }
 
-        if (!result.getVerificationInfo().isEmpty()) {
-            panel.add(createMessagesPanel("Information", result.getVerificationInfo(), INFO_COLOR));
-            panel.add(Box.createRigidArea(new Dimension(0, 15)));
-        }
+//        if (!result.getVerificationInfo().isEmpty()) {
+//            panel.add(createMessagesPanel("Information", result.getVerificationInfo(), INFO_COLOR));
+//            panel.add(Box.createRigidArea(new Dimension(0, 15)));
+//        }
 
         // Signature Details Section
         panel.add(createSignatureDetailsPanel());
@@ -355,7 +355,7 @@ public class SignaturePropertiesDialog extends JDialog {
      * 7. Long Term Validation - Embedded validation data for future verification (optional)
      */
     private JPanel createVerificationStatusPanel() {
-        JPanel section = createSection("Verification Status (PDF/ISO 32000)");
+        JPanel section = createSection("Verification Status");
 
         // Core verification checks - REQUIRED for valid signature
         addStatusRow(section, "Signature Valid", result.isSignatureValid());

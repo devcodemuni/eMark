@@ -116,11 +116,6 @@ public class SignatureVerificationService {
                 log.info("No signatures found in PDF");
                 return results;
             }
-
-            log.info("Found " + signatureNames.size() + " signature(s) in PDF");
-
-            // Verify signatures sequentially (one by one)
-            log.info("Verifying " + signatureNames.size() + " signature(s) sequentially");
             results.addAll(verifySignaturesSequential(reader, acroFields, signatureNames));
 
         } catch (Exception e) {
@@ -757,7 +752,15 @@ public class SignatureVerificationService {
 
         } catch (Exception e) {
             log.error("Error during signature verification", e);
-            result.addVerificationError("Verification error: " + e.getMessage());
+
+            if (e.getMessage().contains("can't decode PKCS7SignedData object")) {
+                result.addVerificationError("No valid digital signature was found in the document.");
+                result.addVerificationError("Details: " + e.getMessage());
+            } else {
+                result.addVerificationError("Signature verification failed");
+                result.addVerificationError("Details: " + e.getMessage());
+            }
+
         }
 
         return result;
