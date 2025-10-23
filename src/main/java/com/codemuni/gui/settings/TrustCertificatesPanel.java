@@ -35,6 +35,8 @@ import java.util.Set;
 public class TrustCertificatesPanel extends JPanel {
 
     private static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("MMM dd, yyyy");
+    private static final int HEADER_ICON_BASE_SIZE = 140;
+    private static final float HEADER_ICON_SCALE = 0.6f;
 
     private final TrustStoreManager trustStoreManager;
     private final DefaultTableModel tableModel;
@@ -294,41 +296,60 @@ public class TrustCertificatesPanel extends JPanel {
     }
 
     private JPanel createHeaderPanel() {
-        JPanel panel = new JPanel(new BorderLayout(UIConstants.Dimensions.SPACING_NORMAL, 0));
+        JPanel panel = new JPanel(new GridBagLayout());
         panel.setBackground(UIConstants.Colors.BG_PRIMARY);
         panel.setBorder(new EmptyBorder(0, 0, UIConstants.Dimensions.SPACING_LARGE, 0));
 
-        // Shield icon on the left side
-        JPanel iconPanel = new JPanel();
-        iconPanel.setBackground(UIConstants.Colors.BG_PRIMARY);
-        iconPanel.setPreferredSize(new Dimension(180, 160));
-        iconPanel.setLayout(new GridBagLayout());
+        GridBagConstraints iconConstraints = new GridBagConstraints();
+        iconConstraints.gridx = 0;
+        iconConstraints.gridy = 0;
+        iconConstraints.insets = new Insets(0, 0, 0, UIConstants.Dimensions.SPACING_NORMAL);
+        iconConstraints.anchor = GridBagConstraints.CENTER;
 
-        // Try to load the shield icon
-        ImageIcon shieldIcon = IconLoader.loadIcon("shield.png", 140);
+        panel.add(createHeaderIconComponent(), iconConstraints);
+
+        GridBagConstraints infoConstraints = new GridBagConstraints();
+        infoConstraints.gridx = 1;
+        infoConstraints.gridy = 0;
+        infoConstraints.weightx = 1.0;
+        infoConstraints.fill = GridBagConstraints.HORIZONTAL;
+        infoConstraints.anchor = GridBagConstraints.CENTER;
+
+        panel.add(createHeaderInfoPanel(), infoConstraints);
+
+        return panel;
+    }
+
+    private JComponent createHeaderIconComponent() {
+        JPanel iconWrapper = new JPanel(new GridBagLayout());
+        iconWrapper.setBackground(UIConstants.Colors.BG_PRIMARY);
+
+        int iconSize = Math.max(1, Math.round(HEADER_ICON_BASE_SIZE * HEADER_ICON_SCALE));
+        ImageIcon shieldIcon = IconLoader.loadIcon("shield.png", iconSize);
+
+        JLabel iconLabel;
         if (shieldIcon != null) {
-            JLabel iconLabel = new JLabel(shieldIcon);
-            iconPanel.add(iconLabel);
+            iconLabel = new JLabel(shieldIcon);
         } else {
-            // Fallback to emoji
-            JLabel fallbackLabel = IconLoader.createShieldFallback(80);
-            iconPanel.add(fallbackLabel);
+            int fallbackSize = Math.round(80 * HEADER_ICON_SCALE);
+            iconLabel = IconLoader.createShieldFallback(Math.max(1, fallbackSize));
         }
 
-        panel.add(iconPanel, BorderLayout.WEST);
+        iconWrapper.add(iconLabel);
+        return iconWrapper;
+    }
 
-        // Info text on the right side
+    private JPanel createHeaderInfoPanel() {
         JPanel infoPanel = new JPanel();
         infoPanel.setLayout(new BoxLayout(infoPanel, BoxLayout.Y_AXIS));
         infoPanel.setBackground(UIConstants.Colors.BG_PRIMARY);
+        infoPanel.setAlignmentY(Component.CENTER_ALIGNMENT);
 
-        // Title
         JLabel titleLabel = new JLabel("Trust Manager - Certificate Management");
         titleLabel.setFont(UIConstants.Fonts.TITLE_BOLD);
         titleLabel.setForeground(UIConstants.Colors.TEXT_PRIMARY);
         titleLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-        // Description - compact
         JLabel descLabel = new JLabel("<html>" +
             "<div style='margin-top: 8px; margin-bottom: 6px;'>" +
             "This panel shows ALL trust certificates used for signature verification" +
@@ -337,16 +358,14 @@ public class TrustCertificatesPanel extends JPanel {
         descLabel.setForeground(UIConstants.Colors.TEXT_TERTIARY);
         descLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-        // Certificate types - single line
         JLabel typesLabel = new JLabel("<html>" +
-            "<b style='color: #6eb3ff;'>Embedded</b> (read-only) • " +
+            "<b style='color: #6eb3ff;'>Embedded</b> (read-only) &bull; " +
             "<b style='color: #64dd64;'>Manual</b> (removable)" +
             "</html>");
         typesLabel.setFont(UIConstants.Fonts.SMALL_PLAIN);
         typesLabel.setForeground(UIConstants.Colors.TEXT_SECONDARY);
         typesLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-        // Formats - compact
         JLabel formatsLabel = new JLabel("<html>" +
             "<span style='color: #aaaaaa;'><b>Formats:</b> PEM, DER, CER, CRT, PKCS#7</span>" +
             "</html>");
@@ -362,9 +381,7 @@ public class TrustCertificatesPanel extends JPanel {
         infoPanel.add(Box.createRigidArea(new Dimension(0, UIConstants.Dimensions.SPACING_TINY)));
         infoPanel.add(formatsLabel);
 
-        panel.add(infoPanel, BorderLayout.CENTER);
-
-        return panel;
+        return infoPanel;
     }
 
     private JPanel createBottomPanel() {

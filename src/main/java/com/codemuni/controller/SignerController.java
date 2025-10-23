@@ -74,6 +74,15 @@ public class SignerController {
         this.coordinates = coordinates;
     }
 
+    public void setCoordinates(float llx, float lly, float urx, float ury) {
+        this.coordinates = new int[]{
+                Math.round(llx),
+                Math.round(lly),
+                Math.round(urx),
+                Math.round(ury)
+        };
+    }
+
     public void setExistingFieldName(String existingFieldName) {
         this.existingFieldName = existingFieldName;
     }
@@ -124,12 +133,19 @@ public class SignerController {
         }
 
         // Check if we're signing an existing field or creating a new one
-        if (existingFieldName != null && !existingFieldName.trim().isEmpty()) {
-            // Sign into existing signature field
+        boolean hasExistingField = existingFieldName != null && !existingFieldName.trim().isEmpty();
+        if (hasExistingField) {
             appearanceOptions.setExistingFieldName(existingFieldName);
+            if (pageNumber > 0) {
+                appearanceOptions.setPageNumber(pageNumber);
+            }
+            if (coordinates != null && coordinates.length == 4) {
+                appearanceOptions.setCoordinates(coordinates);
+            } else {
+                log.warn("Existing field coordinates are missing; appearance customization may be limited.");
+            }
             log.info("Signing into existing field: " + existingFieldName);
         } else {
-            // Create new signature field at specified coordinates
             appearanceOptions.setPageNumber(pageNumber);
             appearanceOptions.setCoordinates(coordinates);
             log.info("Creating new signature field at page " + pageNumber);

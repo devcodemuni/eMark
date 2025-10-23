@@ -23,7 +23,6 @@ public class TopBarPanel extends JPanel {
     private static final String BEGIN_SIGN_TEXT = "Begin Sign";
     private static final String CANCEL_SIGN_TEXT = "Cancel Signing (ESC)";
     private static final String CERTIFIED_TEXT = "\ud83d\udd0f Certified";
-    private static final Log log = LogFactory.getLog(TopBarPanel.class);
 
     private final JButton openBtn;
     private final JButton signBtn;

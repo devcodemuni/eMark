@@ -30,7 +30,7 @@ public class SignatureAppearanceBuilder {
 
     private static final Log log = LogFactory.getLog(SignatureAppearanceBuilder.class);
     private static final int REQUIRED_COORDINATE_COUNT = 4;
-    private static final float DEFAULT_WATERMARK_OPACITY = 0.03f;
+    private static final float DEFAULT_WATERMARK_OPACITY = 0.01f;
     private static final int FIELD_NAME_RANDOM_RANGE = 900_000;
 
     private final KeyStoreProvider keyStoreProvider;

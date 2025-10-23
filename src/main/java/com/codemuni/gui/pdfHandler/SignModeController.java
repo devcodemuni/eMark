@@ -594,11 +594,7 @@ public class SignModeController {
                 // Set file and field information in SignerController
                 signerController.setSelectedFile(selectedFile);
                 signerController.setPdfPassword(owner.getPdfPassword());
-                signerController.setExistingFieldName(fieldInfo.getFieldName()); // Use existing field name
-
-                // Clear coordinates and page number to ensure we use the existing field only
-                signerController.setCoordinates(null);
-                signerController.setPageNumber(0);
+                configureSignerForExistingField(fieldInfo);
 
                 // Set callback to reset UI state if user cancels save
                 signerController.setOnSaveCancelled(new Runnable() {
@@ -649,5 +645,15 @@ public class SignModeController {
                 rendererService.showSignatureFieldOverlays(this::signExistingField);
             }
         });
+    }
+    private void configureSignerForExistingField(SignatureFieldInfo fieldInfo) {
+        signerController.setExistingFieldName(fieldInfo.getFieldName());
+        signerController.setPageNumber(fieldInfo.getPageNumber());
+        signerController.setCoordinates(
+                fieldInfo.getLlx(),
+                fieldInfo.getLly(),
+                fieldInfo.getUrx(),
+                fieldInfo.getUry()
+        );
     }
 }

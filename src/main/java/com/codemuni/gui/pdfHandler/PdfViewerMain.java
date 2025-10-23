@@ -452,17 +452,13 @@ public class PdfViewerMain extends JFrame {
                         signaturePanel.updateSignatures(results);
                         signaturePanel.setVisible(true); // Make toggle button visible
 
-                        // Auto-open panel to draw user attention to verification results
-                        signaturePanel.openPanel();
-                        verificationBanner.setButtonSelected(true); // Sync button state
-
                         // Update verification banner with results
                         verificationBanner.updateStatus(results);
 
                         // Draw colored rectangles on PDF pages
                         drawSignatureRectangles(results);
 
-                        log.info("Signature panel updated with " + results.size() + " signature(s) and auto-opened");
+                        log.info("Signature panel updated with " + results.size() + " signature(s)");
                     } else {
                         // PDF is not signed - enable signing (unsigned PDF, signing allowed)
                         topBar.setSignButtonCertified(false);

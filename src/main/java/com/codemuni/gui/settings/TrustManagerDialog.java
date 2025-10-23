@@ -51,7 +51,7 @@ public class TrustManagerDialog extends JDialog {
         infoLabel.setForeground(UIConstants.Colors.TEXT_DISABLED);
 
         // Add a small shield icon next to the text
-        ImageIcon shieldIcon = IconLoader.loadIcon("shield.png", UIConstants.Dimensions.ICON_TINY);
+        ImageIcon shieldIcon = loadScaledIcon("shield.png", UIConstants.Dimensions.ICON_TINY, 0.5f);
         if (shieldIcon != null) {
             infoLabel.setIcon(shieldIcon);
             infoLabel.setIconTextGap(UIConstants.Dimensions.SPACING_SMALL);
@@ -85,5 +85,10 @@ public class TrustManagerDialog extends JDialog {
     public static void showTrustManager() {
         TrustManagerDialog dialog = new TrustManagerDialog();
         dialog.setVisible(true);
+    }
+
+    private ImageIcon loadScaledIcon(String iconName, int baseSize, float scaleFactor) {
+        int scaledSize = Math.max(1, Math.round(baseSize * scaleFactor));
+        return IconLoader.loadIcon(iconName, scaledSize);
     }
 }
