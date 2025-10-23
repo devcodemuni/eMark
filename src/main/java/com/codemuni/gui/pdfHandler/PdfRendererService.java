@@ -159,6 +159,18 @@ public class PdfRendererService {
     }
 
     /**
+     * Checks if the current PDF is encrypted (password-protected).
+     *
+     * @return true if the PDF is encrypted, false otherwise
+     */
+    public boolean isCurrentPdfEncrypted() {
+        if (document == null) {
+            return false;
+        }
+        return document.isEncrypted();
+    }
+
+    /**
      * Detects unsigned signature fields in the current PDF and returns them.
      *
      * @return List of unsigned signature fields

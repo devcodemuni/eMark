@@ -339,6 +339,49 @@ public class PdfViewerMain extends JFrame {
         // Reset color manager for new PDF
         colorManager.reset();
 
+        // Check if PDF is password-protected and signed
+        // If yes, skip verification and show info banner (iText 5 limitation)
+        boolean isEncrypted = pdfRendererService.isCurrentPdfEncrypted();
+        boolean hasPdfPassword = pdfPassword != null && !pdfPassword.isEmpty();
+
+        if (isEncrypted && hasPdfPassword) {
+            // Quick check if PDF has signatures without full verification
+            new Thread(() -> {
+                try {
+                    com.itextpdf.text.pdf.PdfReader quickReader = new com.itextpdf.text.pdf.PdfReader(
+                            pdfFile.getAbsolutePath(), pdfPassword.getBytes());
+                    com.itextpdf.text.pdf.AcroFields acroFields = quickReader.getAcroFields();
+                    boolean hasSigs = acroFields != null && !acroFields.getSignatureNames().isEmpty();
+                    quickReader.close();
+
+                    if (hasSigs) {
+                        // Password-protected signed PDF - show info banner and skip verification
+                        SwingUtilities.invokeLater(() -> {
+                            setLoadingState(false);
+                            verificationBanner.showPasswordProtectedSigned();
+                            signaturePanel.clearSignatures();
+                            signaturePanel.setVisible(false);
+                            layoutOverlayComponents();
+                            log.info("Password-protected signed PDF detected - signature verification skipped (iText 5 limitation)");
+                        });
+                        return;
+                    }
+                } catch (Exception e) {
+                    log.error("Error checking for signatures in encrypted PDF", e);
+                }
+
+                // No signatures or error checking - proceed normally
+                SwingUtilities.invokeLater(() -> {
+                    setLoadingState(false);
+                    verificationBanner.hideBanner();
+                    signaturePanel.clearSignatures();
+                    signaturePanel.setVisible(false);
+                    layoutOverlayComponents();
+                });
+            }, "Quick-Signature-Check-Thread").start();
+            return;
+        }
+
         // Show verification progress in banner and panel + disable buttons
         SwingUtilities.invokeLater(() -> {
             verificationBanner.showVerifying();

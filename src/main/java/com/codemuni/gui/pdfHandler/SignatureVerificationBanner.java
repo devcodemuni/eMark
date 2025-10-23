@@ -41,7 +41,8 @@ public class SignatureVerificationBanner extends JPanel {
         SOME_INVALID,
         ALL_INVALID,
         UNKNOWN,
-        NONE
+        NONE,
+        PASSWORD_PROTECTED_SIGNED // For password-protected signed PDFs
     }
 
     public SignatureVerificationBanner() {
@@ -342,6 +343,26 @@ public class SignatureVerificationBanner extends JPanel {
     }
 
     /**
+     * Shows banner for password-protected signed PDFs.
+     * This indicates that signature verification is not supported for encrypted PDFs.
+     */
+    public void showPasswordProtectedSigned() {
+        currentStatus = VerificationStatus.PASSWORD_PROTECTED_SIGNED;
+        ImageIcon icon = IconLoader.loadIcon("info.png", ICON_SIZE);
+        iconLabel.setIcon(icon);
+        messageLabel.setText("Signature verification isn’t available for password-protected PDFs in this version.");
+        setBackground(WARNING_BG);
+        messageLabel.setForeground(WARNING_FG);
+        progressLabel.setVisible(false);
+        currentBgColor = WARNING_BG;
+
+        // Hide toggle button for this case since there's no verification
+        signatureButton.setVisible(false);
+
+        setVisible(true);
+    }
+
+    /**
      * Updates the progress message during verification.
      */
     public void updateProgress(String message) {
@@ -384,9 +405,10 @@ public class SignatureVerificationBanner extends JPanel {
         progressLabel.setText("");
         progressLabel.setVisible(false);
 
-        // Reset button state
+        // Reset button state and visibility
         signatureButton.setSelected(false);
         signatureButton.setText("Show Panel");
+        signatureButton.setVisible(true); // Restore button visibility
 
         // Clear icon
         iconLabel.setIcon(null);
@@ -491,6 +513,13 @@ public class SignatureVerificationBanner extends JPanel {
                 }
                 bgColor = WARNING_BG;
                 fgColor = WARNING_FG;
+                break;
+
+            case PASSWORD_PROTECTED_SIGNED:
+                iconName = "info.png";
+                message = "Signature verification isn’t available for password-protected PDFs in this version.";
+                bgColor = WARNING_BG;
+                fgColor = WARNING_BG;
                 break;
 
             case UNKNOWN:
