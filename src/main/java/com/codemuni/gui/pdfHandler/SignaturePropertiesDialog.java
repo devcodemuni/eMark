@@ -324,11 +324,6 @@ public class SignaturePropertiesDialog extends JDialog {
             panel.add(Box.createRigidArea(new Dimension(0, 15)));
         }
 
-//        if (!result.getVerificationInfo().isEmpty()) {
-//            panel.add(createMessagesPanel("Information", result.getVerificationInfo(), INFO_COLOR));
-//            panel.add(Box.createRigidArea(new Dimension(0, 15)));
-//        }
-
         // Signature Details Section
         panel.add(createSignatureDetailsPanel());
         panel.add(Box.createRigidArea(new Dimension(0, 15)));

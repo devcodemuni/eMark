@@ -12,6 +12,7 @@ import com.codemuni.core.exception.UserCancelledPasswordEntryException;
 import com.codemuni.core.model.KeystoreAndCertificateInfo;
 import com.codemuni.gui.SmartCardCallbackHandler;
 
+import com.codemuni.utils.AppConstants;
 import com.codemuni.utils.FileUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -32,7 +33,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * PKCS#11 KeyStore provider implementation with persistent session support.
- * PIN is only requested once per app lifecycle unless explicitly logged out/reset.
+ * PIN is cached for the entire app session to improve UX.
  */
 public final class PKCS11KeyStoreProvider implements KeyStoreProvider {
 
@@ -41,6 +42,27 @@ public final class PKCS11KeyStoreProvider implements KeyStoreProvider {
     private static final String PKCS11_TYPE = "PKCS11";
     private static final Provider BC_PROVIDER = new BouncyCastleProvider();
     private final Map<String, String> serialToAlias = new ConcurrentHashMap<>();
+
+    // Runtime PIN cache: token serial -> PIN cache entry (session-only, not persisted)
+    private static final Map<String, PinCacheEntry> pinCache = new ConcurrentHashMap<>();
+
+    /**
+     * PIN cache entry for session-based storage
+     */
+    private static class PinCacheEntry {
+        final char[] pin;
+
+        PinCacheEntry(char[] pin) {
+            this.pin = Arrays.copyOf(pin, pin.length); // Clone for security
+        }
+
+        void clear() {
+            if (pin != null) {
+                Arrays.fill(pin, '\0');
+            }
+        }
+    }
+
     private List<String> pkcs11LibPathsToBeLoadPublicKey;
     private volatile SunPKCS11 sunPKCS11Provider;
     private volatile KeyStore keyStore;
@@ -178,7 +200,7 @@ public final class PKCS11KeyStoreProvider implements KeyStoreProvider {
             throws Exception {
 
         if (!FileUtils.isFileExist(libPath)) {
-            System.err.println("[WARN] PKCS#11 library not found at: " + libPath + " — skipping.");
+            LOG.warn("PKCS#11 library not found at: " + libPath + " — skipping.");
             return;
         }
 
@@ -246,10 +268,24 @@ public final class PKCS11KeyStoreProvider implements KeyStoreProvider {
         sunPKCS11Provider = new SunPKCS11(new ByteArrayInputStream(config.getBytes(StandardCharsets.UTF_8)));
         Security.addProvider(sunPKCS11Provider);
 
+        // Check if we have cached PIN for this token (will auto-check expiry)
+        char[] cachedPin = getCachedPin(tokenSerialNumber);
+        if (cachedPin != null) {
+            pinHandler.setCachedPin(cachedPin);
+            // Log message already printed by getCachedPin()
+        }
+
         try {
             KeyStore.Builder builder = KeyStore.Builder.newInstance(
                     "PKCS11", null, new KeyStore.CallbackHandlerProtection(pinHandler));
             this.keyStore = builder.getKeyStore();
+
+            // Cache the PIN on successful login (only if it was entered, not from cache)
+            if (cachedPin == null && pinHandler.getEnteredPin() != null) {
+                cachePinForToken(tokenSerialNumber, pinHandler.getEnteredPin());
+                LOG.info("PIN cached for token: " + tokenSerialNumber);
+            }
+
             LOG.info("Login successful — session will remain active until logout() or reset().");
         } catch (KeyStoreException e) {
             handleLoginException(e);
@@ -356,7 +392,56 @@ public final class PKCS11KeyStoreProvider implements KeyStoreProvider {
         certificateSerialNumber = null;
         tokenSerialNumber = null;
         pkcs11LibPath = null;
+        // Note: PIN cache is NOT cleared here - it persists for the session
+        LOG.info("PKCS11 provider reset - PIN cache retained for session");
     }
+
+    /**
+     * Gets cached PIN for a token (if exists)
+     */
+    private char[] getCachedPin(String tokenSerial) {
+        if (tokenSerial == null) return null;
+
+        PinCacheEntry entry = pinCache.get(tokenSerial);
+        if (entry == null) {
+            return null; // No cached PIN
+        }
+
+        // Return cached PIN (valid for entire session)
+        LOG.info("Using cached PIN for token: " + tokenSerial);
+        return entry.pin;
+    }
+
+    /**
+     * Caches PIN for a token (session-only, not persisted)
+     */
+    private void cachePinForToken(String tokenSerial, char[] pin) {
+        if (tokenSerial == null || pin == null) return;
+
+        // Clear any existing cached PIN first
+        PinCacheEntry oldEntry = pinCache.get(tokenSerial);
+        if (oldEntry != null) {
+            oldEntry.clear();
+        }
+
+        // Store new PIN (valid for entire app session)
+        pinCache.put(tokenSerial, new PinCacheEntry(pin));
+        LOG.info("PIN cached for token: " + tokenSerial + " (session-based)");
+    }
+
+    /**
+     * Clears all cached PINs (call on app shutdown if needed)
+     */
+    public static void clearAllCachedPins() {
+        for (PinCacheEntry entry : pinCache.values()) {
+            if (entry != null) {
+                entry.clear(); // Securely clear PIN
+            }
+        }
+        pinCache.clear();
+        LOG.info("All cached PINs cleared");
+    }
+
 
     @Override
     public String getProvider() {

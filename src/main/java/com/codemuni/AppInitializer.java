@@ -2,6 +2,7 @@ package com.codemuni;
 
 import com.codemuni.config.AppConfig;
 import com.codemuni.config.ConfigManager;
+import com.codemuni.core.keyStoresProvider.PKCS11KeyStoreProvider;
 import com.codemuni.utils.AppConstants;
 import com.codemuni.utils.FileUtils;
 import org.apache.commons.logging.Log;
@@ -32,6 +33,12 @@ public class AppInitializer {
         } else {
             log.info("Application already initialized.");
         }
+
+        // Register shutdown hook to clear PINs on app exit
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            log.info("Application shutting down - clearing cached PINs");
+            PKCS11KeyStoreProvider.clearAllCachedPins();
+        }));
 
         initialized = true;
     }

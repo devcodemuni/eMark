@@ -2,6 +2,7 @@ package com.codemuni.gui;
 
 import com.codemuni.core.keyStoresProvider.X509SubjectUtils;
 import com.codemuni.utils.StringFormatUtils;
+import com.codemuni.utils.UIConstants;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -17,11 +18,11 @@ import java.text.SimpleDateFormat;
 
 public class CertificateDetailsDialog extends JDialog {
 
-    private static final Color COLOR_BACKGROUND = new Color(34, 34, 34);
-    private static final Color COLOR_TEXT_PRIMARY = new Color(220, 220, 220);
-    private static final Color COLOR_TEXT_SECONDARY = new Color(150, 150, 150);
-    private static final Font MONOSPACED = new Font(Font.MONOSPACED, Font.PLAIN, 12);
-    private static final Font TITLE_FONT = new Font("Segoe UI", Font.BOLD, 14);
+    private static final Color COLOR_BACKGROUND = UIConstants.Colors.BG_TERTIARY;
+    private static final Color COLOR_TEXT_PRIMARY = UIConstants.Colors.TEXT_PRIMARY;
+    private static final Color COLOR_TEXT_SECONDARY = UIConstants.Colors.TEXT_MUTED;
+    private static final Font MONOSPACED = UIConstants.Fonts.MONOSPACE;
+    private static final Font TITLE_FONT = UIConstants.Fonts.LARGE_BOLD;
 
     private final X509Certificate certificate;
 

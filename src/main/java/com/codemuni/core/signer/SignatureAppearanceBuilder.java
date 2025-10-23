@@ -9,14 +9,15 @@ import com.itextpdf.text.pdf.PdfGState;
 import com.itextpdf.text.pdf.PdfSignatureAppearance;
 import com.itextpdf.text.pdf.PdfTemplate;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+
 import java.security.KeyStoreException;
 import java.security.SecureRandom;
 import java.security.cert.CertificateExpiredException;
 import java.security.cert.X509Certificate;
 import java.time.ZonedDateTime;
 import java.util.Objects;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 import static com.codemuni.core.keyStoresProvider.X509SubjectUtils.*;
 
@@ -27,9 +28,9 @@ import static com.codemuni.core.keyStoresProvider.X509SubjectUtils.*;
  */
 public class SignatureAppearanceBuilder {
 
-    private static final Logger LOGGER = Logger.getLogger(SignatureAppearanceBuilder.class.getName());
+    private static final Log log = LogFactory.getLog(SignatureAppearanceBuilder.class);
     private static final int REQUIRED_COORDINATE_COUNT = 4;
-    private static final float DEFAULT_WATERMARK_OPACITY = 0.20f;
+    private static final float DEFAULT_WATERMARK_OPACITY = 0.03f;
     private static final int FIELD_NAME_RANDOM_RANGE = 900_000;
 
     private final KeyStoreProvider keyStoreProvider;
@@ -83,7 +84,7 @@ public class SignatureAppearanceBuilder {
         if (options.isUseExistingField() && options.getExistingFieldName() != null) {
             // Sign into existing unsigned signature field (/Sig AcroForm field)
             String existingFieldName = options.getExistingFieldName();
-            LOGGER.info("Signing into existing signature field: " + existingFieldName);
+            log.info("Signing into existing signature field: " + existingFieldName);
             appearance.setVisibleSignature(existingFieldName);
             return;
         }
@@ -93,14 +94,14 @@ public class SignatureAppearanceBuilder {
 
         if (coord != null && coord.length == REQUIRED_COORDINATE_COUNT) {
             if (!areCoordinatesValid(coord)) {
-                LOGGER.warning("Invalid signature coordinates provided. Signature may not display correctly.");
+                log.warn("Invalid signature coordinates provided. Signature may not display correctly.");
             }
 
             Rectangle rect = new Rectangle(coord[0], coord[1], coord[2], coord[3]);
             String fieldName = generateFieldName(signatureFieldName, options.getPageNumber());
             appearance.setVisibleSignature(rect, options.getPageNumber(), fieldName);
         } else {
-            LOGGER.info("No valid coordinates provided. Signature will be invisible.");
+            log.info("No valid coordinates provided. Signature will be invisible.");
         }
     }
 
@@ -137,8 +138,7 @@ public class SignatureAppearanceBuilder {
             Image img = Image.getInstance(options.getGraphicImagePath());
             appearance.setSignatureGraphic(img);
         } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, "Failed to load signature graphic image from: "
-                    + options.getGraphicImagePath(), e);
+            log.error("Failed to load signature graphic image from: " + options.getGraphicImagePath(), e);
             throw new RuntimeException("Failed to load signature graphic image.", e);
         }
     }
@@ -251,7 +251,7 @@ public class SignatureAppearanceBuilder {
         int[] coords = options.getCoordinates();
 
         if (coords == null || coords.length != REQUIRED_COORDINATE_COUNT) {
-            LOGGER.warning("Cannot apply watermark: invalid coordinates");
+            log.warn("Cannot apply watermark: invalid coordinates");
             return;
         }
 
@@ -292,7 +292,7 @@ public class SignatureAppearanceBuilder {
         try {
             background.addImage(watermark);
         } catch (DocumentException e) {
-            LOGGER.log(Level.SEVERE, "Failed to add watermark to signature appearance", e);
+            log.error("Failed to add watermark to signature appearance", e);
             throw new RuntimeException("Failed to add watermark to signature appearance.", e);
         } finally {
             background.restoreState();

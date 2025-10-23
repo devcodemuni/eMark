@@ -32,12 +32,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
 public class SignerController {
-    private static final Logger LOGGER = Logger.getLogger(SignerController.class.getName());
     private static final Log log = LogFactory.getLog(SignerController.class);
     private final PKCS11KeyStoreProvider pkcs11KeyStoreProvider;
     private final PdfSignerService signerService;
@@ -107,7 +104,7 @@ public class SignerController {
 
         X509Certificate x509Certificate = loadSelectedCertificate();
         if (x509Certificate == null) {
-            LOGGER.log(Level.INFO, "No certificate loaded. Signing cancelled.");
+            log.info("No certificate loaded. Signing cancelled.");
             return;
         }
 
@@ -234,7 +231,7 @@ public class SignerController {
             }
 
             default:
-                LOGGER.log(Level.SEVERE, "Unsupported keystore type: {0}", keystoreName);
+                log.error("Unsupported keystore type: " + keystoreName);
                 return null;
         }
 

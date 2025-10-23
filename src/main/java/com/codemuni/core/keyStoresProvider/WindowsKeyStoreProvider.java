@@ -5,6 +5,8 @@ import com.codemuni.core.exception.CertificateNotFoundException;
 import com.codemuni.core.exception.KeyStoreInitializationException;
 import com.codemuni.core.exception.PrivateKeyAccessException;
 import com.codemuni.core.model.KeystoreAndCertificateInfo;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
 import java.io.IOException;
@@ -21,6 +23,7 @@ import static com.codemuni.utils.AppConstants.WIN_KEY_STORE;
 
 public class WindowsKeyStoreProvider extends X509CertificateValidatorImpl implements KeyStoreProvider {
 
+    private static final Log log = LogFactory.getLog(WindowsKeyStoreProvider.class);
     private final KeyStore keyStore;
 
     private final String provider = "SunMSCAPI";
@@ -67,7 +70,7 @@ public class WindowsKeyStoreProvider extends X509CertificateValidatorImpl implem
             }
 
         } catch (KeyStoreException e) {
-            System.err.println("Error accessing Windows keystore: " + e.getMessage());
+            log.error("Error accessing Windows keystore: " + e.getMessage(), e);
         }
 
         return result;

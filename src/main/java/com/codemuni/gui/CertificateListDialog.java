@@ -5,6 +5,7 @@ import com.codemuni.core.keyStoresProvider.X509SubjectUtils;
 import com.codemuni.core.model.KeystoreAndCertificateInfo;
 import com.codemuni.gui.pdfHandler.PdfViewerMain;
 import com.codemuni.utils.AppConstants;
+import com.codemuni.utils.UIConstants;
 import com.codemuni.utils.Utils;
 
 import javax.swing.*;
@@ -22,12 +23,12 @@ import java.util.prefs.Preferences;
 import static com.codemuni.utils.AppConstants.APP_NAME;
 
 public class CertificateListDialog extends JDialog {
-    private static final Color COLOR_BACKGROUND = new Color(34, 34, 34); // base UI
-    private static final Color COLOR_BORDER_SELECTED = new Color(77, 145, 218);
-    private static final Color COLOR_BORDER_NORMAL = new Color(64, 64, 64);
+    private static final Color COLOR_BACKGROUND = UIConstants.Colors.BG_TERTIARY;
+    private static final Color COLOR_BORDER_SELECTED = UIConstants.Colors.STATUS_INFO;
+    private static final Color COLOR_BORDER_NORMAL = UIConstants.Colors.BORDER_PRIMARY;
 
-    private static final Color COLOR_TEXT_PRIMARY = new Color(220, 220, 220);
-    private static final Color COLOR_TEXT_SECONDARY = new Color(150, 150, 150);
+    private static final Color COLOR_TEXT_PRIMARY = UIConstants.Colors.TEXT_PRIMARY;
+    private static final Color COLOR_TEXT_SECONDARY = UIConstants.Colors.TEXT_MUTED;
 
     private final List<KeystoreAndCertificateInfo> certificateList;
     private final List<JPanel> cardList = new ArrayList<>();

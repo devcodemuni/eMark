@@ -72,7 +72,7 @@ public class PKCS12KeyStoreProvider implements KeyStoreProvider {
         try {
             Security.addProvider(provider);
             keyStore = KeyStore.getInstance("PKCS12");
-            System.out.println("Loading PFX file: " + pfxFilePath);
+            log.info("Loading PFX file: " + pfxFilePath);
 
             if (cachedPassword == null) {
                 cachedPassword = promptPasswordWithRetry();
@@ -145,8 +145,7 @@ public class PKCS12KeyStoreProvider implements KeyStoreProvider {
             throw new UserCancelledPasswordEntryException("User cancelled password input.");
         }
 
-        System.out.println("============ Password is ==========");
-        System.out.println("Password is - " + dialog.getValue());
+        log.debug("Password obtained for PFX file");
 
         return dialog.getValue().toCharArray();
     }
@@ -222,7 +221,7 @@ public class PKCS12KeyStoreProvider implements KeyStoreProvider {
                 throw new KeyStoreException("No certificate found for alias: " + alias);
             }
 
-            System.err.println("[WARN] Certificate chain is missing. Using only signer certificate.");
+            log.warn("Certificate chain is missing. Using only signer certificate.");
             chain = new Certificate[]{cert};
         }
 

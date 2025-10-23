@@ -92,7 +92,7 @@ public class PdfSignerService {
 
             File saveFile = showSaveFileDialog();
             if (saveFile == null) {
-                System.out.println("User cancelled file saving.");
+                log.info("User cancelled file saving.");
                 // Reset UI state when save is cancelled
                 if (onSaveCancelled != null) {
                     onSaveCancelled.run();
@@ -124,7 +124,7 @@ public class PdfSignerService {
         }
 
         if (e instanceof UserCancelledPasswordEntryException) {
-            System.err.println(e.getMessage());
+            log.info("User cancelled password entry: " + e.getMessage());
             return;
         }
 

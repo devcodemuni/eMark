@@ -361,8 +361,14 @@ public class PdfViewerMain extends JFrame {
                             verificationBanner.showPasswordProtectedSigned();
                             signaturePanel.clearSignatures();
                             signaturePanel.setVisible(false);
+
+                            // Enable signing for password-protected signed PDFs
+                            // Since we cannot verify certification level, we allow signing
+                            topBar.setSignButtonCertified(false);
+                            topBar.setSignButtonTooltip("Note: Signature verification is not available for password-protected PDFs");
+                            log.info("Password-protected signed PDF detected - signature verification skipped but signing enabled");
+
                             layoutOverlayComponents();
-                            log.info("Password-protected signed PDF detected - signature verification skipped (iText 5 limitation)");
                         });
                         return;
                     }
@@ -376,6 +382,11 @@ public class PdfViewerMain extends JFrame {
                     verificationBanner.hideBanner();
                     signaturePanel.clearSignatures();
                     signaturePanel.setVisible(false);
+
+                    // Enable signing for password-protected unsigned PDFs
+                    topBar.setSignButtonCertified(false);
+                    log.info("Password-protected unsigned PDF - signing enabled");
+
                     layoutOverlayComponents();
                 });
             }, "Quick-Signature-Check-Thread").start();
