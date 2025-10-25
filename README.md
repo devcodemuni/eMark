@@ -95,10 +95,9 @@
 |-----------------|---------|-------------|
 | **USB Tokens** | ✅ Full | eToken, SafeNet, Gemalto, Feitian, and more |
 | **HSM (PKCS#11)** | ✅ Full | Hardware Security Modules with PKCS#11 interface |
-| **Smart Cards** | ✅ Full | Contact and contactless smart cards |
 | **PKCS#12/PFX** | ✅ Full | File-based certificates with private key |
 | **Windows Certificate Store** | ✅ Full | Native Windows certificate integration |
-| **JKS Keystore** | ✅ Full | Java keystore files |
+
 
 ### 🌐 **Cross-Platform Excellence**
 
