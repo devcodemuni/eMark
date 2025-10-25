@@ -75,7 +75,7 @@
 - **Detailed Certificate Info** - View issuer, subject, validity period, key usage, extensions
 - **Timestamp Verification** - Validate RFC 3161 timestamps for long-term validity
 
-### 🖋️ **PDF Digital Signing (*Existing Fields or New Fields*) **
+### 🖋️ **PDF Digital Signing (*Existing Fields or New Fields*)**
 
 <img src="docs/images/Existing-field-sign.png" alt="PDF Signing Interface" width="600">
 
@@ -84,7 +84,6 @@
 - **Live Preview** - See signature appearance before applying
 - **Customizable Appearance** - Add text, reason, location, date, custom images
 - **Multiple Signatures** - Apply multiple signatures to single document
-- **Batch Signing** - Sign multiple documents efficiently
 - **Signature Reason & Location** - Add metadata for legal compliance
 - **Page Selection** - Sign specific pages or all pages
 
