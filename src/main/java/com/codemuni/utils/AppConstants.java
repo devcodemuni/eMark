@@ -6,7 +6,7 @@ import java.nio.file.Paths;
 public class AppConstants {
 
     public static final String APP_NAME = "eMark";
-    public static final String APP_VERSION = "V1.1.2";
+    public static final String APP_VERSION = "V1.1.3";
     public static final String APP_DESCRIPTION = "Cross-platform PDF signer for Windows Certificate Store, PKCS#11/HSM, and PFX files.";
 
     public static final String APP_AUTHOR = "CodeMuni";

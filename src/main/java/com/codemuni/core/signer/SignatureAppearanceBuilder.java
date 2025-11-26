@@ -211,13 +211,30 @@ public class SignatureAppearanceBuilder {
         if (options.isIncludeEntireSubject()) {
             sb.append(getFullSubjectDN(cert)).append("\n\n");
         } else {
-            boolean isIncludeCommonName = (options.getCertificationLevel() == PdfSignatureAppearance.NOT_CERTIFIED && options.isGreenTickEnabled());
-            if (isIncludeCommonName) sb.append("Signed by: ").append(getCommonName(cert)).append("\n");
+
+            if(options.isGraphicRendering()) {
+                sb.append("Signed by: ").append(getCommonName(cert)).append("\n");
+            } else {
+                boolean isIncludeCommonName = (options.getCertificationLevel() == PdfSignatureAppearance.NOT_CERTIFIED && options.isGreenTickEnabled());
+                if (isIncludeCommonName) sb.append("Signed by: ").append(getCommonName(cert)).append("\n");
+            }
             if (options.isIncludeCompany()) {
                 sb.append("ORG: ").append(getOrganization(cert)).append("\n");
             }
+
         }
     }
+//    private void appendCertificateInfo(StringBuilder sb, X509Certificate cert) {
+//        if (options.isIncludeEntireSubject()) {
+//            sb.append(getFullSubjectDN(cert)).append("\n\n");
+//        } else {
+//            boolean isIncludeCommonName = (options.getCertificationLevel() == PdfSignatureAppearance.NOT_CERTIFIED && options.isGreenTickEnabled());
+//            if (isIncludeCommonName) sb.append("Signed by: ").append(getCommonName(cert)).append("\n");
+//            if (options.isIncludeCompany()) {
+//                sb.append("ORG: ").append(getOrganization(cert)).append("\n");
+//            }
+//        }
+//    }
 
     /**
      * Appends reason, location, and custom text metadata.

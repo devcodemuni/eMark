@@ -457,6 +457,43 @@ public class SignatureAppearanceDialog extends JDialog {
         return overlayContainer;
     }
 
+//    private JLabel createLeftLabel() {
+//        String renderingMode = (String) renderingModeCombo.getSelectedItem();
+//        String certLevelLabel = (String) certLevelCombo.getSelectedItem();
+//
+//        // Check if we should hide the left label
+//        boolean isNameAndDescription = "Name and Description".equals(renderingMode);
+//        boolean isGreenTickEnabled = greenTickCheckbox.isSelected();
+//        // Check if NOT_CERTIFIED (which allows editing/additional signatures)
+//        boolean isNotEditable = !CertificationLevel.NOT_CERTIFIED.getLabel().equals(certLevelLabel);
+//
+//        if (isNameAndDescription && isGreenTickEnabled && isNotEditable) {
+//            // Return an empty, invisible label
+//            JLabel emptyLabel = new JLabel();
+//            emptyLabel.setPreferredSize(new Dimension(0, 0));
+//            emptyLabel.setMaximumSize(new Dimension(0, 0));
+//            emptyLabel.setMinimumSize(new Dimension(0, 0));
+//            emptyLabel.setOpaque(false);
+//            return emptyLabel;
+//        }
+//
+//        JLabel leftLabel = new JLabel();
+//        leftLabel.setVerticalAlignment(SwingConstants.TOP);
+//        leftLabel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
+//
+//        if ("Name and Description".equals(renderingMode)) {
+//            leftLabel.setFont(new Font("SansSerif", Font.BOLD, 18));
+//            leftLabel.setText("<html><div style='font-weight:bold; color: black;'>" +
+//                    getCommonName(certificate).replace(" ", "<br>") + "</div></html>");
+//        } else if ("Name and Graphic".equals(renderingMode) && selectedImageFile != null && selectedImageFile.exists()) {
+//            ImageIcon icon = new ImageIcon(selectedImageFile.getAbsolutePath());
+//            Image scaled = icon.getImage().getScaledInstance(80, 50, Image.SCALE_SMOOTH);
+//            leftLabel.setIcon(new ImageIcon(scaled));
+//        }
+//
+//        return leftLabel;
+//    }
+
     private JLabel createLeftLabel() {
         String renderingMode = (String) renderingModeCombo.getSelectedItem();
         String certLevelLabel = (String) certLevelCombo.getSelectedItem();
@@ -485,14 +522,31 @@ public class SignatureAppearanceDialog extends JDialog {
             leftLabel.setFont(new Font("SansSerif", Font.BOLD, 18));
             leftLabel.setText("<html><div style='font-weight:bold; color: black;'>" +
                     getCommonName(certificate).replace(" ", "<br>") + "</div></html>");
-        } else if ("Name and Graphic".equals(renderingMode) && selectedImageFile != null && selectedImageFile.exists()) {
-            ImageIcon icon = new ImageIcon(selectedImageFile.getAbsolutePath());
-            Image scaled = icon.getImage().getScaledInstance(80, 50, Image.SCALE_SMOOTH);
-            leftLabel.setIcon(new ImageIcon(scaled));
+        } else if ("Name and Graphic".equals(renderingMode)) {
+            if (selectedImageFile != null && selectedImageFile.exists()) {
+                // Show the selected image
+                ImageIcon icon = new ImageIcon(selectedImageFile.getAbsolutePath());
+                Image scaled = icon.getImage().getScaledInstance(80, 50, Image.SCALE_SMOOTH);
+                leftLabel.setIcon(new ImageIcon(scaled));
+            } else {
+                // Show placeholder when no image is selected
+                leftLabel.setPreferredSize(new Dimension(80, 50));
+                leftLabel.setHorizontalAlignment(SwingConstants.CENTER);
+                leftLabel.setVerticalAlignment(SwingConstants.CENTER);
+                leftLabel.setText("<html><div style='text-align:center; color:#999; font-size:10px;'>" +
+                        "<b>⚠ Image<br/>Required</b></div></html>");
+                leftLabel.setBorder(BorderFactory.createCompoundBorder(
+                        BorderFactory.createDashedBorder(new Color(255, 150, 0), 2, 4, 2, true),
+                        BorderFactory.createEmptyBorder(5, 5, 5, 5)
+                ));
+                leftLabel.setOpaque(true);
+                leftLabel.setBackground(new Color(255, 245, 230));
+            }
         }
 
         return leftLabel;
     }
+
 
     private JLabel createRightLabel(String previewText) {
         int fontSize = computeFontSizeForPreview(previewText, previewPanel.getWidth());
